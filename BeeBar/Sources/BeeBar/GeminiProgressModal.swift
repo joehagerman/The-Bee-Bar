@@ -12,9 +12,12 @@ public final class GeminiProgressModal: NSObject {
     private var statusLabel: NSTextField!
     private var previewScrollView: NSScrollView!
     private var previewTextView: NSTextView!
+    private var progressBar: NSProgressIndicator!
     private var closeButton: NSButton!
     private var dismissTimer: Timer?
     private var currentTask: Task<Void, Never>?
+    private var elapsedSeconds: Double = 0.0
+    private let totalCountdownSeconds: Double = 5.0
 
     override private init() {
         super.init()
@@ -22,8 +25,8 @@ public final class GeminiProgressModal: NSObject {
     }
 
     private func setupUI() {
-        let width: CGFloat = 420
-        let height: CGFloat = 260
+        let width: CGFloat = 480
+        let height: CGFloat = 360
 
         panel = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: width, height: height),
@@ -32,7 +35,7 @@ public final class GeminiProgressModal: NSObject {
             defer: false
         )
         panel.level = .floating
-        panel.title = "Gemini Summarization"
+        panel.title = "Gemini AI Summarization"
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
@@ -43,27 +46,27 @@ public final class GeminiProgressModal: NSObject {
         visualEffect.blendingMode = .behindWindow
         visualEffect.state = .active
         visualEffect.wantsLayer = true
-        visualEffect.layer?.cornerRadius = 12
+        visualEffect.layer?.cornerRadius = 14
         visualEffect.layer?.masksToBounds = true
         visualEffect.layer?.borderColor = NSColor.separatorColor.withAlphaComponent(0.25).cgColor
         visualEffect.layer?.borderWidth = 1.0
 
         // Title
         titleLabel = NSTextField(labelWithString: "Gemini AI Summary")
-        titleLabel.font = NSFont.systemFont(ofSize: 14, weight: .bold)
+        titleLabel.font = NSFont.systemFont(ofSize: 15, weight: .bold)
         titleLabel.textColor = .labelColor
-        titleLabel.frame = NSRect(x: 20, y: height - 36, width: width - 40, height: 20)
+        titleLabel.frame = NSRect(x: 20, y: height - 38, width: width - 40, height: 22)
         visualEffect.addSubview(titleLabel)
 
         // Subtitle (Conversation title & Model)
         subtitleLabel = NSTextField(labelWithString: "")
         subtitleLabel.font = NSFont.systemFont(ofSize: 11, weight: .regular)
         subtitleLabel.textColor = .secondaryLabelColor
-        subtitleLabel.frame = NSRect(x: 20, y: height - 56, width: width - 40, height: 16)
+        subtitleLabel.frame = NSRect(x: 20, y: height - 58, width: width - 40, height: 16)
         visualEffect.addSubview(subtitleLabel)
 
-        // Spinner
-        spinner = NSProgressIndicator(frame: NSRect(x: (width - 32) / 2, y: height - 105, width: 32, height: 32))
+        // Spinner (shown while waiting)
+        spinner = NSProgressIndicator(frame: NSRect(x: (width - 32) / 2, y: height - 150, width: 32, height: 32))
         spinner.style = .spinning
         spinner.controlSize = .regular
         visualEffect.addSubview(spinner)
@@ -72,14 +75,16 @@ public final class GeminiProgressModal: NSObject {
         statusLabel = NSTextField(labelWithString: "Sending to Gemini...")
         statusLabel.font = NSFont.systemFont(ofSize: 13, weight: .medium)
         statusLabel.alignment = .center
-        statusLabel.frame = NSRect(x: 20, y: height - 135, width: width - 40, height: 20)
+        statusLabel.frame = NSRect(x: 20, y: height - 190, width: width - 40, height: 22)
         visualEffect.addSubview(statusLabel)
 
-        // Preview Scroll View (hidden initially, shown on completion)
-        previewScrollView = NSScrollView(frame: NSRect(x: 20, y: 52, width: width - 40, height: 120))
-        previewScrollView.borderType = .noBorder
-        previewScrollView.drawsBackground = false
+        // Preview Scroll View (displays full returned Gemini brief)
+        previewScrollView = NSScrollView(frame: NSRect(x: 20, y: 78, width: width - 40, height: 195))
+        previewScrollView.borderType = .bezelBorder
+        previewScrollView.drawsBackground = true
+        previewScrollView.backgroundColor = NSColor.textBackgroundColor.withAlphaComponent(0.6)
         previewScrollView.hasVerticalScroller = true
+        previewScrollView.autohidesScrollers = true
         previewScrollView.isHidden = true
 
         previewTextView = NSTextView(frame: previewScrollView.contentView.bounds)
@@ -88,13 +93,25 @@ public final class GeminiProgressModal: NSObject {
         previewTextView.drawsBackground = false
         previewTextView.textColor = .labelColor
         previewTextView.font = NSFont.systemFont(ofSize: 11, weight: .regular)
+        previewTextView.textContainerInset = NSSize(width: 8, height: 8)
         previewScrollView.documentView = previewTextView
         visualEffect.addSubview(previewScrollView)
 
-        // Close / Cancel Button
+        // 0 to 5 second Progress Bar (determinate)
+        progressBar = NSProgressIndicator(frame: NSRect(x: 20, y: 50, width: width - 40, height: 12))
+        progressBar.isIndeterminate = false
+        progressBar.style = .bar
+        progressBar.minValue = 0.0
+        progressBar.maxValue = totalCountdownSeconds
+        progressBar.doubleValue = 0.0
+        progressBar.controlSize = .small
+        progressBar.isHidden = true
+        visualEffect.addSubview(progressBar)
+
+        // Close / Cancel / Done Button
         closeButton = NSButton(title: "Cancel", target: self, action: #selector(handleButtonClick))
         closeButton.bezelStyle = .rounded
-        closeButton.frame = NSRect(x: (width - 90) / 2, y: 14, width: 90, height: 28)
+        closeButton.frame = NSRect(x: (width - 110) / 2, y: 14, width: 110, height: 28)
         visualEffect.addSubview(closeButton)
 
         panel.contentView = visualEffect
@@ -108,18 +125,26 @@ public final class GeminiProgressModal: NSObject {
         storageDir: String
     ) {
         dismissTimer?.invalidate()
+        dismissTimer = nil
         currentTask?.cancel()
+        elapsedSeconds = 0.0
 
         titleLabel.stringValue = "Gemini AI Summary"
         subtitleLabel.stringValue = "\(conv.title) • \(model)"
-        statusLabel.stringValue = "Sending to Gemini..."
-        statusLabel.textColor = .labelColor
 
+        // Initial loading state
         spinner.isHidden = false
         spinner.startAnimation(nil)
 
+        statusLabel.stringValue = "Sending to Gemini..."
+        statusLabel.textColor = .labelColor
+        statusLabel.frame = NSRect(x: 20, y: 360 - 190, width: 480 - 40, height: 22)
+
         previewScrollView.isHidden = true
         previewTextView.string = ""
+
+        progressBar.isHidden = true
+        progressBar.doubleValue = 0.0
 
         closeButton.title = "Cancel"
         closeButton.keyEquivalent = "\u{1b}" // ESC
@@ -130,7 +155,6 @@ public final class GeminiProgressModal: NSObject {
 
         currentTask = Task { [weak self] in
             // Stage 1: "Sending to Gemini..."
-            // Show brief sending feedback before waiting for network stream
             try? await Task.sleep(nanoseconds: 500_000_000)
             if Task.isCancelled { return }
 
@@ -150,11 +174,12 @@ public final class GeminiProgressModal: NSObject {
 
                 await MainActor.run { [weak self] in
                     guard let self = self else { return }
-                    // 1. Copy ENTIRE Gemini response to clipboard
+
+                    // 1. Copy ENTIRE Gemini response payload to clipboard
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(responseText, forType: .string)
 
-                    // 2. Save to exports folder as markdown backup
+                    // 2. Save full response to exports folder as markdown backup
                     let outPath = (storageDir as NSString).appendingPathComponent("conversations/\(conv.id)_gemini_brief.md")
                     try? responseText.write(toFile: outPath, atomically: true, encoding: .utf8)
 
@@ -164,7 +189,7 @@ public final class GeminiProgressModal: NSObject {
 
                     self.statusLabel.stringValue = "Returned summary copied to clipboard!"
                     self.statusLabel.textColor = NSColor(red: 0.1, green: 0.7, blue: 0.3, alpha: 1.0) // Green
-                    self.statusLabel.frame = NSRect(x: 20, y: 260 - 75, width: 380, height: 20)
+                    self.statusLabel.frame = NSRect(x: 20, y: 360 - 82, width: 480 - 40, height: 22)
 
                     self.previewTextView.string = responseText
                     self.previewScrollView.isHidden = false
@@ -172,12 +197,18 @@ public final class GeminiProgressModal: NSObject {
                     self.closeButton.title = "Done"
                     self.closeButton.keyEquivalent = "\r" // Enter
 
-                    // Auto dismiss after 4 seconds if user doesn't interact
-                    self.dismissTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { [weak self] _ in
-                        Task { @MainActor [weak self] in
-                            self?.panel.orderOut(nil)
-                        }
-                    }
+                    // 4. Progress bar running from 0 to 5 seconds
+                    self.progressBar.isHidden = false
+                    self.progressBar.doubleValue = 0.0
+                    self.elapsedSeconds = 0.0
+
+                    self.dismissTimer = Timer.scheduledTimer(
+                        timeInterval: 0.05,
+                        target: self,
+                        selector: #selector(self.handleTimerTick(_:)),
+                        userInfo: nil,
+                        repeats: true
+                    )
                 }
             } catch {
                 if Task.isCancelled { return }
@@ -188,14 +219,26 @@ public final class GeminiProgressModal: NSObject {
 
                     self?.statusLabel.stringValue = "Error: \(error.localizedDescription)"
                     self?.statusLabel.textColor = .systemRed
+                    self?.statusLabel.frame = NSRect(x: 20, y: 360 - 170, width: 480 - 40, height: 40)
                     self?.closeButton.title = "Close"
                 }
             }
         }
     }
 
+    @objc private func handleTimerTick(_ timer: Timer) {
+        elapsedSeconds += 0.05
+        progressBar.doubleValue = min(elapsedSeconds, totalCountdownSeconds)
+        if elapsedSeconds >= totalCountdownSeconds {
+            timer.invalidate()
+            dismissTimer = nil
+            panel.orderOut(nil)
+        }
+    }
+
     @objc private func handleButtonClick() {
         dismissTimer?.invalidate()
+        dismissTimer = nil
         currentTask?.cancel()
         panel.orderOut(nil)
     }

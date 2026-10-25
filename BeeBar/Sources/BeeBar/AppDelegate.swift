@@ -379,7 +379,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
            let content = try? String(contentsOfFile: txtPath, encoding: .utf8), !content.isEmpty {
             sourceText = content
         } else {
-            sourceText = conv.summarySnippet ?? conv.title
+            let mdPath = conv.markdownPath(storageDir: store.config.storageDir)
+            if FileManager.default.fileExists(atPath: mdPath),
+               let mdContent = try? String(contentsOfFile: mdPath, encoding: .utf8), !mdContent.isEmpty {
+                sourceText = mdContent
+            } else {
+                sourceText = conv.summarySnippet ?? conv.title
+            }
         }
 
         let chosenModel = store.config.geminiModel
