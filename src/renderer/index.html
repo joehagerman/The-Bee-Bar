@@ -1,0 +1,457 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bee Desktop</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="dark-theme">
+  <div class="window-container">
+    <!-- Top Drag Bar for macOS Traffic Lights -->
+    <header class="window-titlebar">
+      <div class="titlebar-drag-region">
+        <div class="app-branding">
+          <span class="bee-logo">🐝</span>
+          <span class="app-name">Bee Desktop</span>
+          <span class="dev-badge">Developer Mode</span>
+        </div>
+      </div>
+      <div class="titlebar-actions">
+        <button id="btnQuickSync" class="btn btn-primary btn-sm" title="Synchronize all Bee data">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+          <span>Sync Now</span>
+        </button>
+        <button id="btnAccountBadge" class="btn btn-ghost btn-sm" title="Account & Connection">
+          <span class="status-indicator status-offline" id="connStatusDot"></span>
+          <span id="connStatusText">Not Connected</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Main App Body -->
+    <main class="app-main">
+      <!-- Sidebar Navigation -->
+      <nav class="sidebar">
+        <div class="sidebar-section">
+          <div class="section-label">Bee Data</div>
+          <ul class="nav-list">
+            <li class="nav-item active" data-view="conversations">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              <span>Conversations & Transcripts</span>
+              <span class="nav-badge" id="badgeConversations">0</span>
+            </li>
+            <li class="nav-item" data-view="daily">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+              <span>Daily Summaries</span>
+              <span class="nav-badge" id="badgeDaily">0</span>
+            </li>
+            <li class="nav-item" data-view="journals">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              <span>Journals</span>
+              <span class="nav-badge" id="badgeJournals">0</span>
+            </li>
+            <li class="nav-item" data-view="todos">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              <span>Action Items & Todos</span>
+              <span class="nav-badge" id="badgeTodos">0</span>
+            </li>
+            <li class="nav-item" data-view="facts">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <span>Memory Bank & Facts</span>
+              <span class="nav-badge" id="badgeFacts">0</span>
+            </li>
+            <li class="nav-item" data-view="insights">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              <span>AI Insights & Patterns</span>
+              <span class="nav-badge" id="badgeInsights">0</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="sidebar-section">
+          <div class="section-label">Management</div>
+          <ul class="nav-list">
+            <li class="nav-item" data-view="search">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <span>Global Search</span>
+            </li>
+            <li class="nav-item" data-view="files">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              <span>Export & Files</span>
+            </li>
+            <li class="nav-item" data-view="settings">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+              <span>Settings & Auth</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="sidebar-footer">
+          <div class="storage-info">
+            <span class="storage-label">Local Cache:</span>
+            <span class="storage-path" id="sidebarStoragePath">~/Documents/Bee Exports</span>
+          </div>
+          <button id="btnOpenFolderSidebar" class="btn btn-outline btn-xs w-full">
+            <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+            Open in Finder
+          </button>
+        </div>
+      </nav>
+
+      <!-- Content Layout: List Pane + Detail Pane -->
+      <div class="content-container">
+        <!-- List Pane (for items) -->
+        <section class="list-pane" id="listPane">
+          <div class="list-header">
+            <div class="list-title-row">
+              <h2 id="listTitle">Conversations</h2>
+              <span class="count-badge" id="listCount">0 items</span>
+            </div>
+            <div class="search-input-wrapper">
+              <svg class="icon search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input type="text" id="searchInput" placeholder="Filter current list..." class="input-search">
+            </div>
+          </div>
+
+          <div class="items-list" id="itemsList">
+            <!-- Dynamic Item Cards -->
+            <div class="empty-state">
+              <div class="empty-icon">🐝</div>
+              <h3>No Bee Data Loaded</h3>
+              <p>Connect your account with your Bee token or start with sample developer data.</p>
+              <div class="empty-actions">
+                <button id="btnEmptyConnect" class="btn btn-primary btn-sm">Connect Bee Token</button>
+                <button id="btnEmptySample" class="btn btn-secondary btn-sm">Load Demo Data</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Detail / Reader Pane -->
+        <section class="detail-pane" id="detailPane">
+          <div class="detail-placeholder" id="detailPlaceholder">
+            <div class="placeholder-content">
+              <span class="placeholder-icon">📋</span>
+              <h3>Select a Conversation or Summary</h3>
+              <p>Choose an item from the left pane to view its executive summary, key insights, action items, and full audio transcript.</p>
+            </div>
+          </div>
+
+          <!-- Dynamic Detail Content -->
+          <div class="detail-content" id="detailContent" style="display: none;">
+            <div class="detail-toolbar">
+              <div class="detail-meta-left">
+                <span class="detail-badge" id="detailTypeBadge">Conversation</span>
+                <span class="detail-timestamp" id="detailTimestamp">Oct 25, 2026</span>
+                <span class="detail-duration" id="detailDuration"></span>
+              </div>
+              <div class="detail-actions">
+                <button id="btnOpenMd" class="btn btn-outline btn-sm" title="Open Markdown file in default app (Obsidian, Mac Notes, etc.)">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  <span>Open .md</span>
+                </button>
+                <button id="btnOpenJson" class="btn btn-outline btn-sm" title="Open raw JSON file">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+                  <span>JSON</span>
+                </button>
+                <button id="btnRevealFile" class="btn btn-ghost btn-sm" title="Reveal in Finder">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Finder</span>
+                </button>
+                <button id="btnCopyTranscript" class="btn btn-ghost btn-sm" title="Copy transcript to clipboard">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span>Copy</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="detail-header-card">
+              <h1 id="detailTitle">Conversation Title</h1>
+              <div class="detail-id-row">
+                <span class="id-label">ID:</span>
+                <code id="detailId">conv-12345</code>
+              </div>
+            </div>
+
+            <!-- View Tabs: Synthesized | Markdown | Raw JSON -->
+            <div class="view-tabs">
+              <button class="view-tab active" data-tab="synthesized">Synthesized View</button>
+              <button class="view-tab" data-tab="markdown">Markdown View</button>
+              <button class="view-tab" data-tab="raw-json">Raw JSON Payload</button>
+            </div>
+
+            <div class="tab-panels">
+              <!-- Panel 1: Synthesized Reader -->
+              <div class="tab-panel active" id="panelSynthesized">
+                <!-- Executive Summary Box -->
+                <div class="content-card executive-summary-card" id="cardExecutiveSummary">
+                  <div class="card-header">
+                    <span class="card-icon">📋</span>
+                    <h3>Executive Summary</h3>
+                  </div>
+                  <div class="card-body" id="detailExecutiveSummary">
+                    No summary available.
+                  </div>
+                </div>
+
+                <!-- Key Highlights & Insights -->
+                <div class="content-card highlights-card" id="cardHighlights" style="display: none;">
+                  <div class="card-header">
+                    <span class="card-icon">💡</span>
+                    <h3>Key Insights & Highlights</h3>
+                  </div>
+                  <ul class="highlights-list" id="detailHighlightsList"></ul>
+                </div>
+
+                <!-- Action Items -->
+                <div class="content-card tasks-card" id="cardTasks" style="display: none;">
+                  <div class="card-header">
+                    <span class="card-icon">✅</span>
+                    <h3>Action Items & Follow-ups</h3>
+                  </div>
+                  <ul class="tasks-checklist" id="detailTasksList"></ul>
+                </div>
+
+                <!-- Utterances / Transcript -->
+                <div class="content-card transcript-card" id="cardTranscript">
+                  <div class="card-header transcript-header">
+                    <div class="header-left">
+                      <span class="card-icon">🎙️</span>
+                      <h3>Full Audio Transcript</h3>
+                    </div>
+                    <span class="utterance-badge" id="detailUtteranceCount">0 turns</span>
+                  </div>
+                  <div class="transcript-timeline" id="detailTranscriptTimeline">
+                    <!-- Utterance turns rendered here -->
+                  </div>
+                </div>
+              </div>
+
+              <!-- Panel 2: Markdown Preview -->
+              <div class="tab-panel" id="panelMarkdown">
+                <div class="code-view-container">
+                  <pre><code id="markdownViewCode">Loading markdown...</code></pre>
+                </div>
+              </div>
+
+              <!-- Panel 3: Raw JSON -->
+              <div class="tab-panel" id="panelRawJson">
+                <div class="code-view-container">
+                  <pre><code id="jsonViewCode">Loading JSON...</code></pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Settings View Pane (Overlay / Inline) -->
+        <section class="settings-pane" id="settingsPane" style="display: none;">
+          <div class="settings-content">
+            <div class="settings-header">
+              <h2>Account & Configuration</h2>
+              <p>Configure your bee.computer credentials, switch between public API and local proxy, and manage export directories.</p>
+            </div>
+
+            <div class="settings-card">
+              <h3>🔑 Bee Authentication</h3>
+              <p class="settings-desc">Authenticate using your Bee Developer Bearer Token or point to your running local proxy.</p>
+              
+              <div class="auth-help-banner">
+                <div class="help-title">💡 How to sign into your Bee Developer account:</div>
+                <ul class="help-steps">
+                  <li><strong>Method 1 (Instant Bearer Token):</strong> In the Bee mobile app where you signed in, go to <em>Settings</em> &rarr; tap the version number 5 times to reveal <em>Developer Mode</em> &rarr; tap <em>API Access / Token</em> to copy your Bearer Token, and paste it below.</li>
+                  <li><strong>Method 2 (QR Code Login via CLI):</strong> Run <code>bee login --qr</code> in your terminal and scan the QR code with your Bee app. Then run <code>bee proxy</code> to connect locally on port 8787 without needing to copy tokens!</li>
+                </ul>
+              </div>
+
+              <div class="form-group">
+                <label>Connection Mode</label>
+                <div class="radio-group">
+                  <label class="radio-label">
+                    <input type="radio" name="connMode" value="public" checked>
+                    <span><strong>Public API Endpoint</strong> (<code>https://api.developer.bee.amazon.dev</code>)</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="connMode" value="proxy">
+                    <span><strong>Local Proxy</strong> (<code>http://127.0.0.1:8787</code> from <code>bee proxy</code>)</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="connMode" value="custom">
+                    <span><strong>Custom Endpoint</strong></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="form-group" id="groupEndpoint" style="display: none;">
+                <label for="inputEndpoint">API Endpoint URL</label>
+                <input type="text" id="inputEndpoint" class="form-input" placeholder="https://api.developer.bee.amazon.dev">
+              </div>
+
+              <div class="form-group" id="groupToken">
+                <label for="inputToken">
+                  Bee Bearer Token ($BEE_TOKEN)
+                  <span class="label-hint">Obtained when developer mode is active</span>
+                </label>
+                <div class="input-with-button">
+                  <input type="password" id="inputToken" class="form-input" placeholder="Paste your Bearer token here...">
+                  <button id="btnToggleTokenVisibility" class="btn btn-ghost btn-sm" type="button">Show</button>
+                </div>
+              </div>
+
+              <div class="btn-row">
+                <button id="btnTestConnection" class="btn btn-secondary">
+                  <span>Verify Connection (GET /v1/me)</span>
+                </button>
+                <button id="btnSaveConfig" class="btn btn-primary">
+                  <span>Save Configuration</span>
+                </button>
+              </div>
+
+              <div id="connResultAlert" class="alert-box" style="display: none;"></div>
+            </div>
+
+            <div class="settings-card">
+              <h3>📂 Local Storage & Backup Location</h3>
+              <p class="settings-desc">All downloaded transcripts, executive summaries, journals, and raw JSON payloads are written here.</p>
+
+              <div class="form-group">
+                <label>Export Directory Path</label>
+                <div class="input-with-button">
+                  <input type="text" id="inputStorageDir" class="form-input" readonly>
+                  <button id="btnBrowseFolder" class="btn btn-secondary">Choose Folder...</button>
+                </div>
+              </div>
+
+              <div class="btn-row">
+                <button id="btnOpenStorageFinder" class="btn btn-outline">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                  <span>Reveal in Finder</span>
+                </button>
+                <button id="btnExportZip" class="btn btn-secondary">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Export All as ZIP Archive</span>
+                </button>
+                <button id="btnLoadDemo" class="btn btn-ghost">
+                  <span>Load Sample Bee Data</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Global Search View Pane -->
+        <section class="search-view-pane" id="searchViewPane" style="display: none;">
+          <div class="search-page-container">
+            <div class="search-header">
+              <h2>🔍 Search Transcripts & Summaries</h2>
+              <p>Instant full-text search across all downloaded conversations, executive summaries, journals, and action items.</p>
+              <div class="big-search-box">
+                <svg class="icon big-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input type="text" id="bigSearchInput" placeholder="Search keywords (e.g. roadmap, architecture, decision, meeting)...">
+              </div>
+              <div class="search-options-bar">
+                <label class="radio-label search-mode-opt">
+                  <input type="radio" name="searchEngine" value="local" checked>
+                  <span>⚡ Local Instant Search</span>
+                </label>
+                <label class="radio-label search-mode-opt">
+                  <input type="radio" name="searchEngine" value="bm25">
+                  <span>☁️ Cloud BM25 Keyword</span>
+                </label>
+                <label class="radio-label search-mode-opt">
+                  <input type="radio" name="searchEngine" value="neural">
+                  <span>🧠 Neural Semantic Vector Search</span>
+                </label>
+              </div>
+            </div>
+            <div class="search-results-list" id="searchResultsList">
+              <div class="empty-state">
+                <p>Type a keyword above to find matches across all your Bee files.</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Files & Export View Pane -->
+        <section class="files-view-pane" id="filesViewPane" style="display: none;">
+          <div class="files-page-container">
+            <div class="files-header">
+              <h2>📁 Exported Files & Folder Structure</h2>
+              <p>Your Bee data is stored in open, human-readable formats: clean GitHub-style Markdown (<code>.md</code>) and raw JSON (<code>.json</code>).</p>
+            </div>
+
+            <div class="files-stats-grid">
+              <div class="stat-card">
+                <div class="stat-number" id="statConvCount">0</div>
+                <div class="stat-label">Conversations & Transcripts</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number" id="statDailyCount">0</div>
+                <div class="stat-label">Daily Executive Summaries</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number" id="statJournalCount">0</div>
+                <div class="stat-label">Journals & Reflections</div>
+              </div>
+              <div class="stat-card">
+                <div class="stat-number" id="statTodoCount">0</div>
+                <div class="stat-label">Tasks & Action Items</div>
+              </div>
+            </div>
+
+            <div class="folder-structure-card">
+              <h3>📂 Directory Organization</h3>
+              <pre class="folder-tree"><code><span class="folder">Bee Exports/</span>
+  ├── <span class="folder">conversations/</span>     <span class="comment"># .md with Executive Summaries & dialogue turns, plus raw .json</span>
+  ├── <span class="folder">daily/</span>             <span class="comment"># Daily briefing recaps & executive summaries</span>
+  ├── <span class="folder">journals/</span>          <span class="comment"># Personal journal reflections</span>
+  ├── <span class="folder">todos/</span>             <span class="comment"># Full to-do checklist in Markdown & JSON</span>
+  ├── <span class="folder">facts/</span>             <span class="comment"># Memory bank & learned facts</span>
+  └── <span class="file">metadata.json</span>      <span class="comment"># Local search cache index</span></code></pre>
+            </div>
+
+            <div class="files-actions-row">
+              <button id="btnOpenFolderFilesPage" class="btn btn-primary">
+                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                <span>Open Export Folder in macOS Finder</span>
+              </button>
+              <button id="btnExportZipFilesPage" class="btn btn-secondary">
+                <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Download Everything as .ZIP</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <!-- Sync Progress Modal / Overlay -->
+    <div class="modal-backdrop" id="syncModal" style="display: none;">
+      <div class="modal-card">
+        <div class="modal-header">
+          <div class="modal-title-row">
+            <span class="bee-spinner">🐝</span>
+            <h3>Syncing Bee.computer Data</h3>
+          </div>
+        </div>
+        <div class="modal-body">
+          <div class="progress-bar-container">
+            <div class="progress-bar-fill" id="syncProgressFill" style="width: 0%;"></div>
+          </div>
+          <div class="progress-status-row">
+            <span id="syncProgressMessage">Initializing connection...</span>
+            <span id="syncProgressPercent">0%</span>
+          </div>
+          <div class="sync-logs" id="syncLogs"></div>
+        </div>
+        <div class="modal-footer">
+          <button id="btnCancelSync" class="btn btn-secondary">Cancel</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
