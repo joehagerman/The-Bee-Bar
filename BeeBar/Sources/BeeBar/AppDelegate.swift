@@ -97,8 +97,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(headerItem)
         menu.addItem(NSMenuItem.separator())
 
-        // 2. Recent Conversation Items (up to 25)
-        let conversations = Array(store.conversations.prefix(25))
+        // 2. Recent Conversation Items (configurable count)
+        let limit = store.config.maxItemsToShow > 0 ? store.config.maxItemsToShow : BeeConfig.defaultMaxItemsToShow
+        let conversations = Array(store.conversations.prefix(limit))
         if conversations.isEmpty {
             let emptyItem = NSMenuItem(title: "No Bee records found in \(store.config.storageDir)", action: nil, keyEquivalent: "")
             emptyItem.isEnabled = false
@@ -188,7 +189,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         freqItem.submenu = freqSubmenu
         menu.addItem(freqItem)
 
-        // D. Manual Sync Actions
+        // D. Number of Recordings Submenu
+        let countItem = NSMenuItem(title: "Recordings to Show: \(limit)", action: nil, keyEquivalent: "")
+        let countSubmenu = NSMenu()
+        let countOptions = [5, 10, 15, 20, 25, 50, 100]
+        for opt in countOptions {
+            let label = opt >= 100 ? "All Recordings (100)" : "\(opt) Recordings"
+            let item = NSMenuItem(title: label, action: #selector(setRecordingsCount(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = opt
+            if limit == opt {
+                item.state = .on
+            }
+            countSubmenu.addItem(item)
+        }
+        countItem.submenu = countSubmenu
+        menu.addItem(countItem)
+
+        // E. Manual Sync Actions
         let updateNowTitle = store.isSyncing ? "Updating Records..." : "Update Now (Sync Recent Records)"
         let updateNowItem = NSMenuItem(title: updateNowTitle, action: #selector(updateNow), keyEquivalent: "r")
         updateNowItem.target = self
@@ -341,7 +359,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             sourceText: sourceText,
             apiKey: apiKey,
             model: store.config.geminiModel,
-            storageDir: store.config.storageDir
+            storageDir: store.config.storageDir,
+            prePrompt: store.config.geminiPrompt
         )
     }
 
@@ -533,6 +552,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showNotification(title: "Sync Schedule Updated", body: "Frequency set to \(formatFrequency(sender.tag)).")
     }
 
+    @objc func setRecordingsCount(_ sender: NSMenuItem) {
+        var updated = BeeStore.shared.config
+        updated.maxItemsToShow = sender.tag
+        BeeStore.shared.updateConfig(updated)
+        let display = sender.tag >= 100 ? "all available" : "\(sender.tag)"
+        showNotification(title: "Menu Updated", body: "Showing up to \(display) recordings in menu bar.")
+    }
+
     @objc func updateNow() {
         Task {
             await BeeStore.shared.performSync()
@@ -550,13 +577,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc func openPreferences() {
         if preferencesWindow == nil {
             let win = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 380, height: 490),
-                styleMask: [.titled, .closable],
+                contentRect: NSRect(x: 0, y: 0, width: 540, height: 600),
+                styleMask: [.titled, .closable, .resizable, .miniaturizable],
                 backing: .buffered,
                 defer: false
             )
             win.center()
             win.title = "BeeBar Preferences"
+            win.minSize = CGSize(width: 480, height: 500)
             win.isReleasedWhenClosed = false
             let rootView = SettingsView(store: BeeStore.shared) { [weak win] in
                 win?.close()

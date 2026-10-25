@@ -95,7 +95,8 @@ public actor GeminiService {
     public func summarize(
         text: String,
         apiKey: String,
-        model: String = BeeConfig.defaultGeminiModel
+        model: String = BeeConfig.defaultGeminiModel,
+        prePrompt: String? = nil
     ) async throws -> String {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
@@ -115,17 +116,15 @@ public actor GeminiService {
             throw NSError(domain: "Gemini", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid Gemini endpoint URL for model \(cleanModel)."])
         }
 
+        let instructions: String
+        if let custom = prePrompt?.trimmingCharacters(in: .whitespacesAndNewlines), !custom.isEmpty {
+            instructions = custom
+        } else {
+            instructions = BeeConfig.defaultGeminiPrompt
+        }
+
         let prompt = """
-        You are an elite executive intelligence assistant. Summarize the following audio transcript / conversation into a crisp, high-impact executive brief:
-
-        ### 📋 Executive Takeaway
-        (2 sentences maximum)
-
-        ### 💡 Strategic Highlights & Key Decisions
-        - (3-4 bullet points)
-
-        ### ✅ Action Items & Follow-ups
-        - [ ] (Clear actionable tasks with owners if identified)
+        \(instructions)
 
         CONVERSATION / TRANSCRIPT:
         \(text.prefix(maxTranscriptCharacters))

@@ -150,7 +150,8 @@ public final class GeminiProgressModal: NSObject {
         sourceText: String,
         apiKey: String,
         model: String,
-        storageDir: String
+        storageDir: String,
+        prePrompt: String? = nil
     ) {
         dismissTimer?.invalidate()
         dismissTimer = nil
@@ -194,7 +195,8 @@ public final class GeminiProgressModal: NSObject {
                 let responseText = try await GeminiService.shared.summarize(
                     text: sourceText,
                     apiKey: apiKey,
-                    model: model
+                    model: model,
+                    prePrompt: prePrompt
                 )
 
                 if Task.isCancelled { return }

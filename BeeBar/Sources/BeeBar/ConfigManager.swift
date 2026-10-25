@@ -15,6 +15,19 @@ public struct BeeConfig: Codable, Sendable {
     public static let defaultEndpoint = "http://127.0.0.1:8787"
     public static let publicCloudEndpoint = "https://api.developer.bee.amazon.dev"
     public static let defaultGeminiModel = "gemini-2.5-flash"
+    public static let defaultMaxItemsToShow = 15
+    public static let defaultGeminiPrompt = """
+You are an elite executive intelligence assistant. Summarize the following audio transcript / conversation into a crisp, high-impact executive brief:
+
+### 📋 Executive Takeaway
+(2 sentences maximum)
+
+### 💡 Strategic Highlights & Key Decisions
+- (3-4 bullet points)
+
+### ✅ Action Items & Follow-ups
+- [ ] (Clear actionable tasks with owners if identified)
+"""
 
     public var endpoint: String
     public var token: String
@@ -23,6 +36,8 @@ public struct BeeConfig: Codable, Sendable {
     public var lastSyncedAt: Double?
     public var geminiApiKey: String
     public var geminiModel: String
+    public var geminiPrompt: String
+    public var maxItemsToShow: Int
 
     /// Default exports directory (`~/Documents/Bee Exports`).
     public static var defaultStorageDirectory: String {
@@ -38,7 +53,9 @@ public struct BeeConfig: Codable, Sendable {
         syncIntervalMinutes: Int = 5,
         lastSyncedAt: Double? = nil,
         geminiApiKey: String = "",
-        geminiModel: String = BeeConfig.defaultGeminiModel
+        geminiModel: String = BeeConfig.defaultGeminiModel,
+        geminiPrompt: String = BeeConfig.defaultGeminiPrompt,
+        maxItemsToShow: Int = BeeConfig.defaultMaxItemsToShow
     ) {
         self.endpoint = endpoint.isEmpty ? BeeConfig.defaultEndpoint : endpoint
         self.token = token
@@ -47,6 +64,8 @@ public struct BeeConfig: Codable, Sendable {
         self.lastSyncedAt = lastSyncedAt
         self.geminiApiKey = geminiApiKey
         self.geminiModel = geminiModel.isEmpty ? BeeConfig.defaultGeminiModel : geminiModel
+        self.geminiPrompt = geminiPrompt.isEmpty ? BeeConfig.defaultGeminiPrompt : geminiPrompt
+        self.maxItemsToShow = maxItemsToShow > 0 ? maxItemsToShow : BeeConfig.defaultMaxItemsToShow
     }
 }
 
@@ -83,6 +102,8 @@ public final class ConfigManager: Sendable {
                 var lastSyncedAt: Double?
                 var geminiApiKey: String?
                 var geminiModel: String?
+                var geminiPrompt: String?
+                var maxItemsToShow: Int?
             }
 
             let decoded = try JSONDecoder().decode(PartialConfig.self, from: data)
@@ -93,7 +114,9 @@ public final class ConfigManager: Sendable {
                 syncIntervalMinutes: decoded.syncIntervalMinutes ?? 5,
                 lastSyncedAt: decoded.lastSyncedAt,
                 geminiApiKey: decoded.geminiApiKey ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? "",
-                geminiModel: decoded.geminiModel ?? BeeConfig.defaultGeminiModel
+                geminiModel: decoded.geminiModel ?? BeeConfig.defaultGeminiModel,
+                geminiPrompt: decoded.geminiPrompt ?? BeeConfig.defaultGeminiPrompt,
+                maxItemsToShow: decoded.maxItemsToShow ?? BeeConfig.defaultMaxItemsToShow
             )
         } catch {
             return BeeConfig()
@@ -115,6 +138,8 @@ public final class ConfigManager: Sendable {
             existingDict["syncIntervalMinutes"] = config.syncIntervalMinutes
             existingDict["geminiApiKey"] = config.geminiApiKey
             existingDict["geminiModel"] = config.geminiModel
+            existingDict["geminiPrompt"] = config.geminiPrompt
+            existingDict["maxItemsToShow"] = config.maxItemsToShow
             if let last = config.lastSyncedAt {
                 existingDict["lastSyncedAt"] = last
             }
