@@ -9,6 +9,10 @@ rm -rf "$APP_BUNDLE"
 mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
+if [ -d "$DIR/Resources" ]; then
+    cp -R "$DIR/Resources/"* "$APP_BUNDLE/Contents/Resources/"
+fi
+
 cp "$DIR/.build/release/BeeBar" "$APP_BUNDLE/Contents/MacOS/BeeBar"
 chmod +x "$APP_BUNDLE/Contents/MacOS/BeeBar"
 
