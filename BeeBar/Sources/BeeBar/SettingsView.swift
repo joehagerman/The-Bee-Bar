@@ -10,6 +10,7 @@ struct SettingsView: View {
     @State private var syncInterval: Int = 5
     @State private var geminiApiKey: String = ""
     @State private var isShowingToken: Bool = false
+    @State private var isShowingGeminiKey: Bool = false
     @State private var testResultText: String? = nil
     @State private var isTesting: Bool = false
 
@@ -17,7 +18,7 @@ struct SettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Header
             HStack {
-                Text("⚙️ BeeBar Settings")
+                Text("BeeBar Settings")
                     .font(.headline)
                     .fontWeight(.semibold)
                 Spacer()
@@ -72,6 +73,15 @@ struct SettingsView: View {
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                             Spacer()
+                            Button("Paste") {
+                                if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
+                                    self.token = clip
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+
                             Button(isShowingToken ? "Hide" : "Show") {
                                 isShowingToken.toggle()
                             }
@@ -114,11 +124,35 @@ struct SettingsView: View {
 
                     // Gemini API Key
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("Google Gemini API Key (Flash Lite)")
-                            .font(.subheadline)
-                            .fontWeight(.medium)
-                        SecureField("AIzaSy... (for 1-click Flash Lite summarization)", text: $geminiApiKey)
-                            .textFieldStyle(.roundedBorder)
+                        HStack {
+                            Text("Google Gemini API Key (Flash Lite)")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            Button("Paste") {
+                                if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
+                                    self.geminiApiKey = clip
+                                }
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+
+                            Button(isShowingGeminiKey ? "Hide" : "Show") {
+                                isShowingGeminiKey.toggle()
+                            }
+                            .buttonStyle(.borderless)
+                            .font(.caption)
+                            .foregroundColor(Color.amber)
+                        }
+
+                        if isShowingGeminiKey {
+                            TextField("AIzaSy... (for 1-click Flash Lite summarization)", text: $geminiApiKey)
+                                .textFieldStyle(.roundedBorder)
+                        } else {
+                            SecureField("AIzaSy... (for 1-click Flash Lite summarization)", text: $geminiApiKey)
+                                .textFieldStyle(.roundedBorder)
+                        }
                         Text("Used when selecting 'Summarize with Gemini Flash Lite' on any conversation.")
                             .font(.caption2)
                             .foregroundColor(.secondary)

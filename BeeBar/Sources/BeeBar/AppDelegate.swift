@@ -15,7 +15,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Request notification permissions
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
-        // Setup NSStatusItem with large Black & White Bee icon
+        // Enable standard clipboard edit shortcuts (⌘V, ⌘C, ⌘X, ⌘A, ⌘Z) for all text fields
+        let appMenu = NSMenu()
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+        editMenu.addItem(withTitle: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        editMenu.addItem(withTitle: "Redo", action: Selector(("redo:")), keyEquivalent: "Z")
+        editMenu.addItem(NSMenuItem.separator())
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        editMenuItem.submenu = editMenu
+        appMenu.addItem(editMenuItem)
+        NSApp.mainMenu = appMenu
+
+        // Setup NSStatusItem with 50% smaller Black & White Bee icon
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
             let icon = BeeIcon.createIcon()
@@ -71,7 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             of: FileManager.default.homeDirectoryForCurrentUser.path,
             with: "~"
         )
-        let folderItem = NSMenuItem(title: "📂 Folder: \(folderDisplay)", action: #selector(openFolderInFinder), keyEquivalent: "")
+        let folderItem = NSMenuItem(title: "Folder: \(folderDisplay)", action: #selector(openFolderInFinder), keyEquivalent: "")
         folderItem.target = self
 
         let folderSubmenu = NSMenu()
@@ -90,7 +105,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let syncStatusText = store.isConnected
             ? (store.config.endpoint.contains("8787") ? "Connected (Proxy 127.0.0.1:8787)" : "Connected (Cloud API)")
             : "Offline / Needs Setup"
-        let syncItem = NSMenuItem(title: "🐝 Bee Sync: \(syncStatusText)", action: nil, keyEquivalent: "")
+        let syncItem = NSMenuItem(title: "Bee Sync: \(syncStatusText)", action: nil, keyEquivalent: "")
 
         let syncSubmenu = NSMenu()
         let proxyAction = NSMenuItem(title: "Switch to Local Proxy (127.0.0.1:8787)", action: #selector(switchToProxy), keyEquivalent: "")
@@ -118,7 +133,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // C. Update Frequency Submenu
         let freqText = formatFrequency(store.config.syncIntervalMinutes)
-        let freqItem = NSMenuItem(title: "⏱️ Update Frequency: \(freqText)", action: nil, keyEquivalent: "")
+        let freqItem = NSMenuItem(title: "Update Frequency: \(freqText)", action: nil, keyEquivalent: "")
 
         let freqSubmenu = NSMenu()
         let freqs: [(String, Int)] = [
@@ -142,13 +157,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(freqItem)
 
         // D. Update Now & Update All
-        let updateNowTitle = store.isSyncing ? "🔄 Updating Records..." : "🔄 Update Now (Sync Recent Records)"
+        let updateNowTitle = store.isSyncing ? "Updating Records..." : "Update Now (Sync Recent Records)"
         let updateNowItem = NSMenuItem(title: updateNowTitle, action: #selector(updateNow), keyEquivalent: "r")
         updateNowItem.target = self
         updateNowItem.isEnabled = !store.isSyncing
         menu.addItem(updateNowItem)
 
-        let updateAllItem = NSMenuItem(title: "⚡ Update All (Full Archive Sync)", action: #selector(updateAll), keyEquivalent: "")
+        let updateAllItem = NSMenuItem(title: "Update All (Full Archive Sync)", action: #selector(updateAll), keyEquivalent: "")
         updateAllItem.target = self
         updateAllItem.isEnabled = !store.isSyncing
         menu.addItem(updateAllItem)
@@ -182,7 +197,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         item.target = self
         item.representedObject = conv
 
-        // Tooltip: Displays full summary when hovered
+        // Tooltip: Fallback hint
         let dateStr = conv.relativeDateString
         let durStr = conv.formattedDuration ?? ""
         let turnsStr = (conv.utteranceCount != nil) ? "\(conv.utteranceCount!) turns" : ""
@@ -195,37 +210,37 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         \(cleanSummary)
         """
 
-        // Submenu: Copy Transcript, Copy Summary, Summarize with Gemini Flash Lite
+        // Submenu on the right side: Copy Summary, Copy Transcript, Summarize with Gemini Flash Lite, etc.
         let submenu = NSMenu()
 
-        let copySummaryItem = NSMenuItem(title: "📋 Copy Summary", action: #selector(copySummary(_:)), keyEquivalent: "")
+        let copySummaryItem = NSMenuItem(title: "Copy Summary", action: #selector(copySummary(_:)), keyEquivalent: "")
         copySummaryItem.target = self
         copySummaryItem.representedObject = conv
         submenu.addItem(copySummaryItem)
 
-        let copyTranscriptItem = NSMenuItem(title: "🎙️ Copy Transcript", action: #selector(copyTranscript(_:)), keyEquivalent: "")
+        let copyTranscriptItem = NSMenuItem(title: "Copy Transcript", action: #selector(copyTranscript(_:)), keyEquivalent: "")
         copyTranscriptItem.target = self
         copyTranscriptItem.representedObject = conv
         submenu.addItem(copyTranscriptItem)
 
-        let geminiItem = NSMenuItem(title: "⚡ Summarize with Gemini Flash Lite", action: #selector(summarizeWithGemini(_:)), keyEquivalent: "")
+        let geminiItem = NSMenuItem(title: "Summarize with Gemini Flash Lite", action: #selector(summarizeWithGemini(_:)), keyEquivalent: "")
         geminiItem.target = self
         geminiItem.representedObject = conv
         submenu.addItem(geminiItem)
 
         submenu.addItem(NSMenuItem.separator())
 
-        let openMdItem = NSMenuItem(title: "📄 Open Markdown Summary (.md)", action: #selector(openMarkdown(_:)), keyEquivalent: "")
+        let openMdItem = NSMenuItem(title: "Open Markdown Summary (.md)", action: #selector(openMarkdown(_:)), keyEquivalent: "")
         openMdItem.target = self
         openMdItem.representedObject = conv
         submenu.addItem(openMdItem)
 
-        let openTxtItem = NSMenuItem(title: "📝 Open Transcript (.txt)", action: #selector(openTranscript(_:)), keyEquivalent: "")
+        let openTxtItem = NSMenuItem(title: "Open Transcript (.txt)", action: #selector(openTranscript(_:)), keyEquivalent: "")
         openTxtItem.target = self
         openTxtItem.representedObject = conv
         submenu.addItem(openTxtItem)
 
-        let revealItem = NSMenuItem(title: "🔍 Reveal in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
+        let revealItem = NSMenuItem(title: "Reveal in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
         revealItem.target = self
         revealItem.representedObject = conv
         submenu.addItem(revealItem)
@@ -370,19 +385,36 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func promptForToken() {
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Set Bee Developer Bearer Token"
         alert.informativeText = "Paste your Bee developer Bearer token ($BEE_TOKEN):"
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 26))
         input.stringValue = BeeStore.shared.config.token
+        input.placeholderString = "Paste token here..."
+        input.isEditable = true
+        input.isSelectable = true
         alert.accessoryView = input
+
         alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Paste from Clipboard")
         alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn {
+
+        alert.window.initialFirstResponder = input
+
+        let resp = alert.runModal()
+        if resp == .alertFirstButtonReturn {
             var updated = BeeStore.shared.config
             updated.token = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             BeeStore.shared.updateConfig(updated)
             showNotification(title: "Token Saved", body: "Bearer token updated.")
+        } else if resp == .alertSecondButtonReturn {
+            if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
+                var updated = BeeStore.shared.config
+                updated.token = clip
+                BeeStore.shared.updateConfig(updated)
+                showNotification(title: "Token Pasted & Saved", body: "Bearer token updated from clipboard.")
+            }
         }
     }
 
@@ -488,15 +520,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     private func promptForGeminiKey() -> String {
+        NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Gemini API Key Needed"
-        alert.informativeText = "Enter your Google Gemini API key to enable instant Flash Lite summarization:"
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
-        input.placeholderString = "AIzaSy..."
+        alert.informativeText = "Paste your Google Gemini API key to enable instant Flash Lite summarization:"
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 26))
+        input.placeholderString = "Paste API key (AIzaSy...)"
+        input.stringValue = BeeStore.shared.config.geminiApiKey
+        input.isEditable = true
+        input.isSelectable = true
         alert.accessoryView = input
+
         alert.addButton(withTitle: "Save & Summarize")
+        alert.addButton(withTitle: "Paste from Clipboard")
         alert.addButton(withTitle: "Cancel")
-        if alert.runModal() == .alertFirstButtonReturn {
+
+        alert.window.initialFirstResponder = input
+
+        let resp = alert.runModal()
+        if resp == .alertFirstButtonReturn {
             let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
             if !key.isEmpty {
                 var updated = BeeStore.shared.config
@@ -504,8 +546,44 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 BeeStore.shared.updateConfig(updated)
                 return key
             }
+        } else if resp == .alertSecondButtonReturn {
+            if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
+                var updated = BeeStore.shared.config
+                updated.geminiApiKey = clip
+                BeeStore.shared.updateConfig(updated)
+                return clip
+            }
         }
         return ""
+    }
+
+    // MARK: - NSMenuDelegate (Hover / Highlight Left-Side Summary Preview)
+    func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
+        guard let item = item, let conv = item.representedObject as? BeeConversationItem else {
+            SummaryPreviewPanel.shared.hide()
+            return
+        }
+        let cleanSummary = getCleanSummary(conv: conv)
+
+        // Locate active menu window frame
+        var menuFrame = NSRect.zero
+        for w in NSApp.windows {
+            let className = String(describing: type(of: w))
+            if className.contains("Menu") && w.isVisible && w.frame.width > 80 {
+                menuFrame = w.frame
+                break
+            }
+        }
+        if menuFrame == .zero, let button = statusItem.button, let window = button.window {
+            let buttonScreen = window.convertToScreen(button.frame)
+            menuFrame = NSRect(x: buttonScreen.minX - 320, y: buttonScreen.minY - 420, width: 340, height: 420)
+        }
+
+        SummaryPreviewPanel.shared.show(for: conv, summary: cleanSummary, menuFrame: menuFrame)
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        SummaryPreviewPanel.shared.hide()
     }
 
     private func showNotification(title: String, body: String) {
