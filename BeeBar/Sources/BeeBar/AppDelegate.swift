@@ -15,11 +15,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Request notification permissions
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
-        // Setup NSStatusItem with colorized Bee icon
+        // Setup NSStatusItem with large Black & White Bee icon
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = BeeIcon.createIcon()
+            let icon = BeeIcon.createIcon()
+            button.image = icon
             button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
             button.toolTip = "Bee Menu Bar"
         }
 
