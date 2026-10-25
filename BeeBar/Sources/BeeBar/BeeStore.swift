@@ -1,10 +1,21 @@
+//
+//  BeeStore.swift
+//  BeeBar
+//
+//  Central @MainActor state container coordinating configuration, local metadata indexing,
+//  background synchronization scheduling, and Finder file system operations.
+//
+
 import Foundation
 import AppKit
 import Combine
 
+/// Observable application state store for BeeBar.
 @MainActor
-public class BeeStore: ObservableObject {
+public final class BeeStore: ObservableObject {
     public static let shared = BeeStore()
+
+    // MARK: - Published State
 
     @Published public var config: BeeConfig
     @Published public var conversations: [BeeConversationItem] = []
@@ -16,8 +27,12 @@ public class BeeStore: ObservableObject {
     @Published public var lastSyncTimeText: String = "Never"
     @Published public var showingSettings: Bool = false
 
-    private var syncEngine: BeeSyncEngine
+    // MARK: - Private Properties
+
+    private let syncEngine: BeeSyncEngine
     private var syncTimer: Timer?
+
+    // MARK: - Initialization
 
     private init() {
         let loadedConfig = ConfigManager.shared.load()
@@ -33,16 +48,22 @@ public class BeeStore: ObservableObject {
         }
     }
 
+    // MARK: - Configuration & Local Cache
+
+    /// Updates the active configuration, persists it to disk, and restarts the background sync schedule.
     public func updateConfig(_ newConfig: BeeConfig) {
         self.config = newConfig
         ConfigManager.shared.save(newConfig)
+        setupTimer()
+        loadLocalData()
+
         Task {
             await syncEngine.updateConfig(newConfig)
-            setupTimer()
             await checkConnection()
         }
     }
 
+    /// Reads `<storageDir>/metadata.json` and updates the in-memory `conversations` array.
     public func loadLocalData() {
         let metaPath = (config.storageDir as NSString).appendingPathComponent("metadata.json")
         guard FileManager.default.fileExists(atPath: metaPath),
@@ -56,23 +77,24 @@ public class BeeStore: ObservableObject {
                 self.conversations = list
             }
             if let last = meta.lastSyncedAt {
-                let d = Date(timeIntervalSince1970: last / 1000)
-                let df = DateFormatter()
-                df.timeStyle = .short
-                df.dateStyle = .none
-                self.lastSyncTimeText = df.string(from: d)
+                let date = Date(timeIntervalSince1970: last / 1000)
+                self.lastSyncTimeText = DateFormatter.localizedString(from: date, dateStyle: .none, timeStyle: .short)
             }
         } catch {
-            print("Failed to decode metadata: \(error)")
+            print("Failed to decode metadata.json: \(error)")
         }
     }
 
+    // MARK: - Synchronization & Connectivity
+
+    /// Checks connectivity against the configured Bee API endpoint (`GET /v1/me`).
     public func checkConnection() async {
         let result = await syncEngine.testConnection()
         self.isConnected = result.success
         self.connectionDetails = result.message
     }
 
+    /// Runs an incremental sync against the Bee API and refreshes local conversation data.
     public func performSync() async {
         guard !isSyncing else { return }
         self.isSyncing = true
@@ -81,7 +103,7 @@ public class BeeStore: ObservableObject {
 
         do {
             _ = try await syncEngine.sync { [weak self] message, progress in
-                Task { @MainActor in
+                Task { @MainActor [weak self] in
                     self?.syncMessage = message
                     self?.syncProgress = progress
                 }
@@ -98,6 +120,9 @@ public class BeeStore: ObservableObject {
         }
     }
 
+    // MARK: - Finder & Workspace Operations
+
+    /// Opens the configured exports folder in macOS Finder, creating it first if needed.
     public func openFolderInFinder() {
         let url = URL(fileURLWithPath: config.storageDir)
         if !FileManager.default.fileExists(atPath: url.path) {
@@ -106,15 +131,16 @@ public class BeeStore: ObservableObject {
         NSWorkspace.shared.open(url)
     }
 
+    /// Opens a specific exported file in its default macOS application, or falls back to opening the exports directory.
     public func openFile(atPath path: String) {
         if FileManager.default.fileExists(atPath: path) {
             NSWorkspace.shared.open(URL(fileURLWithPath: path))
         } else {
-            // Open parent dir if file missing
             openFolderInFinder()
         }
     }
 
+    /// Highlights and selects a specific file in macOS Finder.
     public func revealInFinder(atPath path: String) {
         let url = URL(fileURLWithPath: path)
         if FileManager.default.fileExists(atPath: path) {
@@ -124,13 +150,29 @@ public class BeeStore: ObservableObject {
         }
     }
 
+    // MARK: - Background Timer Scheduling
+
+    /// Configures the recurring background sync timer based on `config.syncIntervalMinutes`.
+    /// Passing `0` ("Manual Only") disables automatic background syncing.
     private func setupTimer() {
         syncTimer?.invalidate()
-        let mins = max(1, config.syncIntervalMinutes)
-        syncTimer = Timer.scheduledTimer(withTimeInterval: Double(mins * 60), repeats: true) { [weak self] _ in
-            Task { @MainActor in
-                await self?.performSync()
-            }
+        syncTimer = nil
+
+        let mins = config.syncIntervalMinutes
+        guard mins > 0 else { return }
+
+        syncTimer = Timer.scheduledTimer(
+            timeInterval: Double(mins * 60),
+            target: self,
+            selector: #selector(handleSyncTimerTick(_:)),
+            userInfo: nil,
+            repeats: true
+        )
+    }
+
+    @objc private func handleSyncTimerTick(_ timer: Timer) {
+        Task {
+            await performSync()
         }
     }
 }

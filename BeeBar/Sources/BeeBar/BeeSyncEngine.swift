@@ -1,5 +1,18 @@
+//
+//  BeeSyncEngine.swift
+//  BeeBar
+//
+//  Background actor responsible for communicating with the Bee API (local proxy or cloud),
+//  downloading conversation records and utterances, formatting Markdown and plain-text
+//  exports, aligning file creation/modification timestamps with conversation times,
+//  and rebuilding the local `metadata.json` index.
+//
+
 import Foundation
 
+// MARK: - Connection Test Result
+
+/// Result of verifying connectivity against the Bee API `/v1/me` endpoint.
 public struct TestConnectionResult: Sendable {
     public let success: Bool
     public let message: String
@@ -10,6 +23,9 @@ public struct TestConnectionResult: Sendable {
     }
 }
 
+// MARK: - Synchronization Actor
+
+/// Actor that performs network requests and file export generation off the main thread.
 public actor BeeSyncEngine {
     private var config: BeeConfig
 
@@ -17,10 +33,14 @@ public actor BeeSyncEngine {
         self.config = config
     }
 
+    /// Updates the engine's active configuration.
     public func updateConfig(_ newConfig: BeeConfig) {
         self.config = newConfig
     }
 
+    // MARK: - Connection Verification
+
+    /// Verifies API reachability and authentication via `GET /v1/me`.
     public func testConnection() async -> TestConnectionResult {
         guard let url = URL(string: "\(cleanEndpoint())/v1/me") else {
             return TestConnectionResult(success: false, message: "Invalid endpoint URL")
@@ -42,7 +62,10 @@ public actor BeeSyncEngine {
             if httpResponse.statusCode == 200 {
                 let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
                 let user = json?["user"] as? [String: Any] ?? json
-                let name = (user?["name"] as? String) ?? (user?["email"] as? String) ?? "Bee User"
+                let name = (user?["name"] as? String)
+                    ?? (user?["first_name"] as? String)
+                    ?? (user?["email"] as? String)
+                    ?? "Bee User"
                 return TestConnectionResult(success: true, message: "Connected: \(name)")
             } else {
                 let errStr = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
@@ -53,11 +76,18 @@ public actor BeeSyncEngine {
         }
     }
 
+    // MARK: - Synchronization Pipeline
+
+    /// Fetches conversations from the Bee API, caches new or incomplete records locally,
+    /// writes `.json`, `.md`, and `.txt` exports with conversation-matched file dates,
+    /// and updates `metadata.json`.
+    ///
+    /// - Parameter onProgress: Callback reporting human-readable status and progress (`0.0...1.0`).
+    /// - Returns: Count of newly downloaded or updated conversations.
     public func sync(onProgress: @Sendable (String, Double) -> Void) async throws -> Int {
         ensureDirectories()
         onProgress("Checking Bee API connection...", 0.05)
 
-        // 1. Fetch conversations list
         guard let url = URL(string: "\(cleanEndpoint())/v1/conversations") else {
             throw NSError(domain: "BeeBar", code: 1, userInfo: [NSLocalizedDescriptionKey: "Invalid API endpoint"])
         }
@@ -96,44 +126,45 @@ public actor BeeSyncEngine {
 
             var fullConv: [String: Any] = item
 
-            let fileExists = fm.fileExists(atPath: jsonPath) && (try? fm.attributesOfItem(atPath: jsonPath)[.size] as? Int ?? 0) ?? 0 > 10
+            let jsonSize = (try? fm.attributesOfItem(atPath: jsonPath)[.size] as? Int) ?? 0
+            let fileExists = fm.fileExists(atPath: jsonPath) && jsonSize > 10
 
             if fileExists {
-                // Check if transcripts are missing
+                // Regenerate derived Markdown/Transcript files if missing
                 if !fm.fileExists(atPath: txtPath) || !fm.fileExists(atPath: mdPath) {
                     if let cachedData = try? Data(contentsOf: URL(fileURLWithPath: jsonPath)),
                        let cachedJson = try? JSONSerialization.jsonObject(with: cachedData) as? [String: Any] {
                         fullConv = (cachedJson["conversation"] as? [String: Any]) ?? cachedJson
                     }
                 } else {
-                    continue // Already fully synced locally!
+                    continue
                 }
             } else {
-                // Fetch detail
-                onProgress("Downloading transcript (\(idx + 1)/\(total))...", 0.15 + (Double(idx) / Double(max(1, total))) * 0.75)
-                if let detail = try? await fetchConversationDetail(id: id) {
+                let progress = 0.15 + (Double(idx) / Double(max(1, total))) * 0.75
+                onProgress("Downloading transcript (\(idx + 1)/\(total))...", progress)
+                if let detail = try? await fetchConversationDetail(id: id), !detail.isEmpty {
                     fullConv = detail
                     newOrUpdatedCount += 1
                 }
             }
 
-            // Save JSON
+            // 1. Save Raw JSON
             if let serialized = try? JSONSerialization.data(withJSONObject: fullConv, options: [.prettyPrinted]) {
                 try? serialized.write(to: URL(fileURLWithPath: jsonPath), options: [.atomic])
             }
 
-            // Save Markdown Summary
+            // 2. Save Markdown Summary
             let mdContent = formatConversationMarkdown(conv: fullConv, id: safeId)
             try? mdContent.write(to: URL(fileURLWithPath: mdPath), atomically: true, encoding: .utf8)
 
-            // Save Verbatim Transcript .txt and .md
+            // 3. Save Verbatim Transcripts (.txt and .md)
             let txtContent = formatPureTranscriptText(conv: fullConv, id: safeId)
             try? txtContent.write(to: URL(fileURLWithPath: txtPath), atomically: true, encoding: .utf8)
 
             let mdTrContent = formatPureTranscriptMarkdown(conv: fullConv, id: safeId)
             try? mdTrContent.write(to: URL(fileURLWithPath: mdTranscriptPath), atomically: true, encoding: .utf8)
 
-            // Set file creation & modification dates to match conversation time
+            // 4. Stamp file creation & modification dates to match the actual conversation timestamp
             let convDate = parseTimestamp(fullConv["start_time"])
                 ?? parseTimestamp(fullConv["created_at"])
                 ?? parseTimestamp(fullConv["timestamp"])
@@ -144,7 +175,6 @@ public actor BeeSyncEngine {
             setFileDate(path: mdTranscriptPath, date: convDate)
         }
 
-        // Rebuild or update metadata.json
         onProgress("Saving metadata index...", 0.95)
         updateLocalMetadata()
 
@@ -152,6 +182,9 @@ public actor BeeSyncEngine {
         return newOrUpdatedCount
     }
 
+    // MARK: - API Networking Helpers
+
+    /// Fetches the full conversation record (including transcriptions/utterances) for a given conversation ID.
     private func fetchConversationDetail(id: String) async throws -> [String: Any] {
         guard let url = URL(string: "\(cleanEndpoint())/v1/conversations/\(id)") else {
             throw NSError(domain: "BeeBar", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid detail URL"])
@@ -172,23 +205,17 @@ public actor BeeSyncEngine {
         return [:]
     }
 
-    private func ensureDirectories() {
-        let fm = FileManager.default
-        let dirs = ["conversations", "transcripts", "daily", "todos", "facts", "insights", "journals"]
-        for d in dirs {
-            let p = (config.storageDir as NSString).appendingPathComponent(d)
-            if !fm.fileExists(atPath: p) {
-                try? fm.createDirectory(atPath: p, withIntermediateDirectories: true)
-            }
-        }
-    }
-
+    /// Normalizes the configured endpoint URL by removing any trailing slash.
     private func cleanEndpoint() -> String {
         var ep = config.endpoint.trimmingCharacters(in: .whitespacesAndNewlines)
         if ep.hasSuffix("/") { ep = String(ep.dropLast()) }
         return ep
     }
 
+    // MARK: - Local Metadata Index Builder
+
+    /// Scans `<storageDir>/conversations/*.json`, enforces file timestamps, classifies topics,
+    /// and writes the sorted conversation index to `<storageDir>/metadata.json`.
     private func updateLocalMetadata() {
         let convDir = (config.storageDir as NSString).appendingPathComponent("conversations")
         let fm = FileManager.default
@@ -240,10 +267,10 @@ public actor BeeSyncEngine {
             items.append(dict)
         }
 
-        // Sort items by created_at descending
+        // Sort newest conversations first
         items.sort { a, b in
-            let aTime = (a["created_at"] as? Double) ?? Double((a["created_at"] as? Int) ?? 0)
-            let bTime = (b["created_at"] as? Double) ?? Double((b["created_at"] as? Int) ?? 0)
+            let aTime = parseTimestamp(a["created_at"])?.timeIntervalSince1970 ?? 0
+            let bTime = parseTimestamp(b["created_at"])?.timeIntervalSince1970 ?? 0
             return aTime > bTime
         }
 
@@ -262,6 +289,9 @@ public actor BeeSyncEngine {
         }
     }
 
+    // MARK: - Markdown & Transcript Formatting
+
+    /// Extracts utterance dictionaries from either top-level `utterances` or nested `transcriptions`.
     private func extractUtterances(_ conv: [String: Any]) -> [[String: Any]] {
         if let direct = conv["utterances"] as? [[String: Any]], !direct.isEmpty {
             return direct
@@ -278,6 +308,7 @@ public actor BeeSyncEngine {
         return []
     }
 
+    /// Formats a complete Markdown document containing frontmatter, executive summary, and audio transcript.
     private func formatConversationMarkdown(conv: [String: Any], id: String) -> String {
         let title = (conv["short_summary"] as? String) ?? (conv["title"] as? String) ?? "Conversation \(id)"
         let summary = (conv["summary"] as? String) ?? (conv["short_summary"] as? String) ?? "No summary available."
@@ -312,6 +343,7 @@ public actor BeeSyncEngine {
         return md
     }
 
+    /// Formats a clean plain-text verbatim transcript (`transcripts/<id>_transcript.txt`).
     private func formatPureTranscriptText(conv: [String: Any], id: String) -> String {
         let title = (conv["short_summary"] as? String) ?? (conv["title"] as? String) ?? "Conversation \(id)"
         let utterances = extractUtterances(conv)
@@ -335,6 +367,7 @@ public actor BeeSyncEngine {
         return out
     }
 
+    /// Formats a Markdown verbatim transcript (`transcripts/<id>_transcript.md`).
     private func formatPureTranscriptMarkdown(conv: [String: Any], id: String) -> String {
         let title = (conv["short_summary"] as? String) ?? (conv["title"] as? String) ?? "Conversation \(id)"
         let utterances = extractUtterances(conv)
@@ -358,6 +391,9 @@ public actor BeeSyncEngine {
         return md
     }
 
+    // MARK: - Automatic Topic Classification
+
+    /// Assigns topical category tags and keywords based on conversation title and summary content.
     private func classify(title: String, summary: String) -> ([String], [String]) {
         let text = (title + " " + summary).lowercased()
         var tags: [String] = []
@@ -393,6 +429,21 @@ public actor BeeSyncEngine {
         return (tags, keywords)
     }
 
+    // MARK: - File System & Timestamp Utilities
+
+    /// Ensures all required export subdirectories exist inside `config.storageDir`.
+    private func ensureDirectories() {
+        let fm = FileManager.default
+        let dirs = ["conversations", "transcripts", "daily", "todos", "facts", "insights", "journals"]
+        for d in dirs {
+            let p = (config.storageDir as NSString).appendingPathComponent(d)
+            if !fm.fileExists(atPath: p) {
+                try? fm.createDirectory(atPath: p, withIntermediateDirectories: true)
+            }
+        }
+    }
+
+    /// Parses numeric epoch timestamps (seconds or milliseconds) or ISO-8601 date strings.
     private func parseTimestamp(_ raw: Any?) -> Date? {
         guard let raw = raw else { return nil }
         if let d = raw as? Double {
@@ -415,6 +466,7 @@ public actor BeeSyncEngine {
         return nil
     }
 
+    /// Sets both the creation date and modification date of a file on disk to match the conversation time.
     private func setFileDate(path: String, date: Date) {
         try? FileManager.default.setAttributes([
             .creationDate: date,

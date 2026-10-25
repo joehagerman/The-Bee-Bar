@@ -1,6 +1,21 @@
+//
+//  ConfigManager.swift
+//  BeeBar
+//
+//  Manages reading and writing user configuration to `~/.bee-desktop/config.json`.
+//  Preserves external keys in `config.json` that may be used by companion CLI or desktop tools.
+//
+
 import Foundation
 
+// MARK: - Configuration Model
+
+/// User preferences and API settings for BeeBar.
 public struct BeeConfig: Codable, Sendable {
+    public static let defaultEndpoint = "http://127.0.0.1:8787"
+    public static let publicCloudEndpoint = "https://api.developer.bee.amazon.dev"
+    public static let defaultGeminiModel = "gemini-2.5-flash"
+
     public var endpoint: String
     public var token: String
     public var storageDir: String
@@ -9,25 +24,35 @@ public struct BeeConfig: Codable, Sendable {
     public var geminiApiKey: String
     public var geminiModel: String
 
+    /// Default exports directory (`~/Documents/Bee Exports`).
+    public static var defaultStorageDirectory: String {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent("Documents/Bee Exports")
+            .path
+    }
+
     public init(
-        endpoint: String = "http://127.0.0.1:8787",
+        endpoint: String = BeeConfig.defaultEndpoint,
         token: String = "",
         storageDir: String = "",
         syncIntervalMinutes: Int = 5,
         lastSyncedAt: Double? = nil,
         geminiApiKey: String = "",
-        geminiModel: String = "gemini-2.5-flash"
+        geminiModel: String = BeeConfig.defaultGeminiModel
     ) {
-        self.endpoint = endpoint
+        self.endpoint = endpoint.isEmpty ? BeeConfig.defaultEndpoint : endpoint
         self.token = token
-        self.storageDir = storageDir.isEmpty ? (FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Bee Exports").path) : storageDir
+        self.storageDir = storageDir.isEmpty ? BeeConfig.defaultStorageDirectory : storageDir
         self.syncIntervalMinutes = syncIntervalMinutes
         self.lastSyncedAt = lastSyncedAt
         self.geminiApiKey = geminiApiKey
-        self.geminiModel = geminiModel.isEmpty ? "gemini-2.5-flash" : geminiModel
+        self.geminiModel = geminiModel.isEmpty ? BeeConfig.defaultGeminiModel : geminiModel
     }
 }
 
+// MARK: - Configuration Persistence Manager
+
+/// Thread-safe manager responsible for loading and saving `BeeConfig` at `~/.bee-desktop/config.json`.
 public final class ConfigManager: Sendable {
     public static let shared = ConfigManager()
 
@@ -42,6 +67,7 @@ public final class ConfigManager: Sendable {
         self.configURL = beeDesktopDir.appendingPathComponent("config.json")
     }
 
+    /// Loads `BeeConfig` from disk, falling back to sensible defaults for any missing fields.
     public func load() -> BeeConfig {
         guard FileManager.default.fileExists(atPath: configURL.path),
               let data = try? Data(contentsOf: configURL) else {
@@ -58,25 +84,25 @@ public final class ConfigManager: Sendable {
                 var geminiApiKey: String?
                 var geminiModel: String?
             }
+
             let decoded = try JSONDecoder().decode(PartialConfig.self, from: data)
-            let defaultStorage = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Bee Exports").path
             return BeeConfig(
-                endpoint: decoded.endpoint ?? "http://127.0.0.1:8787",
+                endpoint: decoded.endpoint ?? BeeConfig.defaultEndpoint,
                 token: decoded.token ?? "",
-                storageDir: decoded.storageDir ?? defaultStorage,
+                storageDir: decoded.storageDir ?? BeeConfig.defaultStorageDirectory,
                 syncIntervalMinutes: decoded.syncIntervalMinutes ?? 5,
                 lastSyncedAt: decoded.lastSyncedAt,
                 geminiApiKey: decoded.geminiApiKey ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? "",
-                geminiModel: decoded.geminiModel ?? "gemini-2.5-flash"
+                geminiModel: decoded.geminiModel ?? BeeConfig.defaultGeminiModel
             )
         } catch {
             return BeeConfig()
         }
     }
 
+    /// Saves `BeeConfig` to `~/.bee-desktop/config.json`, merging into existing JSON so companion tool keys remain intact.
     public func save(_ config: BeeConfig) {
         do {
-            // Read existing JSON if possible to preserve other keys (like 'user' or 'sidebarVisibility')
             var existingDict: [String: Any] = [:]
             if let data = try? Data(contentsOf: configURL),
                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {

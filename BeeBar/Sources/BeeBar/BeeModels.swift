@@ -1,5 +1,17 @@
+//
+//  BeeModels.swift
+//  BeeBar
+//
+//  Core data models representing Bee conversations, flexible timestamp decoding,
+//  and the local metadata index (`metadata.json`).
+//
+
 import Foundation
 
+// MARK: - Conversation Item Model
+
+/// Represents a single synced Bee conversation record and provides computed
+/// formatting and file path helpers.
 public struct BeeConversationItem: Identifiable, Codable, Sendable {
     public let id: String
     public let title: String
@@ -11,6 +23,9 @@ public struct BeeConversationItem: Identifiable, Codable, Sendable {
     public let keywords: [String]?
     public let location: String?
 
+    // MARK: - Formatted Display Properties
+
+    /// Human-readable duration string (e.g. `"12m 34s"` or `"45s"`).
     public var formattedDuration: String? {
         guard let ms = duration_ms, ms > 0 else { return nil }
         let totalSeconds = Int(ms / 1000)
@@ -20,20 +35,21 @@ public struct BeeConversationItem: Identifiable, Codable, Sendable {
         return "\(mins)m \(secs)s"
     }
 
+    /// Conversation start/creation date parsed from `created_at`.
     public var createdDate: Date? {
-        guard let ts = created_at else { return nil }
-        return ts.toDate()
+        created_at?.toDate()
     }
 
+    /// Relative date string for recent conversations (within 3 days) or medium date/time string for older records.
     public var relativeDateString: String {
         guard let date = createdDate else { return "Unknown date" }
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .abbreviated
         let now = Date()
         let diff = now.timeIntervalSince(date)
         if diff < 60 {
             return "Just now"
         } else if diff < 86400 * 3 {
+            let formatter = RelativeDateTimeFormatter()
+            formatter.unitsStyle = .abbreviated
             return formatter.localizedString(for: date, relativeTo: now)
         } else {
             let df = DateFormatter()
@@ -43,23 +59,38 @@ public struct BeeConversationItem: Identifiable, Codable, Sendable {
         }
     }
 
+    // MARK: - Local Export File Paths
+
+    /// Path to the exported Markdown summary file (`conversations/<id>.md`).
     public func markdownPath(storageDir: String) -> String {
-        return (storageDir as NSString).appendingPathComponent("conversations/\(id).md")
+        (storageDir as NSString).appendingPathComponent("conversations/\(id).md")
     }
 
+    /// Path to the raw Bee API JSON record (`conversations/<id>.json`).
     public func jsonPath(storageDir: String) -> String {
-        return (storageDir as NSString).appendingPathComponent("conversations/\(id).json")
+        (storageDir as NSString).appendingPathComponent("conversations/\(id).json")
     }
 
+    /// Path to the saved Gemini executive brief (`conversations/<id>_gemini_brief.md`).
+    public func geminiBriefPath(storageDir: String) -> String {
+        (storageDir as NSString).appendingPathComponent("conversations/\(id)_gemini_brief.md")
+    }
+
+    /// Path to the plain-text verbatim transcript (`transcripts/<id>_transcript.txt`).
     public func transcriptTextPath(storageDir: String) -> String {
-        return (storageDir as NSString).appendingPathComponent("transcripts/\(id)_transcript.txt")
+        (storageDir as NSString).appendingPathComponent("transcripts/\(id)_transcript.txt")
     }
 
+    /// Path to the Markdown verbatim transcript (`transcripts/<id>_transcript.md`).
     public func transcriptMarkdownPath(storageDir: String) -> String {
-        return (storageDir as NSString).appendingPathComponent("transcripts/\(id)_transcript.md")
+        (storageDir as NSString).appendingPathComponent("transcripts/\(id)_transcript.md")
     }
 }
 
+// MARK: - Polymorphic Timestamp Codable
+
+/// Decodes timestamps that may arrive as epoch milliseconds/seconds (`Double` or `Int`)
+/// or ISO-8601 strings (`String`).
 public enum AnyTimestamp: Codable, Sendable {
     case double(Double)
     case int(Int)
@@ -87,6 +118,7 @@ public enum AnyTimestamp: Codable, Sendable {
         }
     }
 
+    /// Converts the underlying timestamp representation into a Foundation `Date`.
     public func toDate() -> Date? {
         switch self {
         case .double(let d):
@@ -104,6 +136,9 @@ public enum AnyTimestamp: Codable, Sendable {
     }
 }
 
+// MARK: - Local Metadata Index
+
+/// Represents the root structure of `<storageDir>/metadata.json`.
 public struct BeeMetadata: Codable, Sendable {
     public var lastSyncedAt: Double?
     public var conversations: [BeeConversationItem]?

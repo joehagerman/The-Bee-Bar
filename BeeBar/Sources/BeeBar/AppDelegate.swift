@@ -1,25 +1,73 @@
+//
+//  AppDelegate.swift
+//  BeeBar
+//
+//  Main application delegate managing the macOS menu bar NSStatusItem, dynamic NSMenu
+//  construction, left-side hover summary preview panel, clipboard actions, Gemini AI
+//  summarization triggers, and Preferences window lifecycle.
+//
+
 import AppKit
 import SwiftUI
 import UserNotifications
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+
+    // MARK: - Properties
+
     var statusItem: NSStatusItem!
     var mainMenu: NSMenu!
     var preferencesWindow: NSWindow?
 
+    // MARK: - Application Lifecycle
+
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Prevent macOS Automatic Termination from closing this accessory menu bar app
+        // Prevent macOS Automatic Termination from closing this accessory menu bar app when idle
         ProcessInfo.processInfo.disableAutomaticTermination("BeeBar status item")
         ProcessInfo.processInfo.disableSuddenTermination()
 
-        // Run purely as an accessory menu bar application
+        // Run purely as an accessory menu bar application (no Dock icon)
         NSApp.setActivationPolicy(.accessory)
 
-        // Request notification permissions
+        // Request user notification permissions
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
-        // Enable standard clipboard edit shortcuts (⌘V, ⌘C, ⌘X, ⌘A, ⌘Z) for all text fields
+        // Enable standard macOS Edit menu shortcuts (⌘V, ⌘C, ⌘X, ⌘A, ⌘Z) for all modal and settings text fields
+        setupStandardEditMenu()
+
+        // Configure NSStatusItem in the system menu bar
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = "computer.bee.beebar.statusItem"
+        statusItem.behavior = [.removalAllowed]
+        statusItem.isVisible = true
+        if let button = statusItem.button {
+            button.image = BeeIcon.createIcon()
+            button.imagePosition = .imageOnly
+            button.imageScaling = .scaleProportionallyDown
+            button.toolTip = "Bee Menu Bar (⌘-drag to reposition)"
+        }
+
+        // Attach dynamic NSMenu
+        mainMenu = NSMenu()
+        mainMenu.delegate = self
+        statusItem.menu = mainMenu
+
+        // Load cached local conversation index
+        BeeStore.shared.loadLocalData()
+
+        showNotification(
+            title: "BeeBar is Active",
+            body: "Look for the Bee icon in your menu bar. Tip: Hold ⌘ and drag the icon to reposition it."
+        )
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        false
+    }
+
+    /// Configures the hidden application Edit menu so standard keyboard shortcuts (Paste, Copy, Cut, Select All, Undo) work inside `NSTextField` and SwiftUI `TextField` views.
+    private func setupStandardEditMenu() {
         let appMenu = NSMenu()
         let editMenuItem = NSMenuItem()
         let editMenu = NSMenu(title: "Edit")
@@ -33,54 +81,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         editMenuItem.submenu = editMenu
         appMenu.addItem(editMenuItem)
         NSApp.mainMenu = appMenu
-
-        // Setup NSStatusItem with authentic Bee icon
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.autosaveName = "computer.bee.beebar.statusItem"
-        statusItem.behavior = [.removalAllowed]
-        statusItem.isVisible = true
-        if let button = statusItem.button {
-            let icon = BeeIcon.createIcon()
-            button.image = icon
-            button.imagePosition = .imageOnly
-            button.imageScaling = .scaleProportionallyDown
-            button.toolTip = "Bee Menu Bar (⌘-drag to reposition)"
-        }
-
-        // Setup native macOS NSMenu
-        mainMenu = NSMenu()
-        mainMenu.delegate = self
-        statusItem.menu = mainMenu
-
-        // Initial load of local records
-        BeeStore.shared.loadLocalData()
-
-        showNotification(
-            title: "BeeBar is Active",
-            body: "Look for the Bee icon in your menu bar. Tip: Hold ⌘ and drag the icon to move it toward the right side of your menu bar."
-        )
     }
 
-    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return false
-    }
+    // MARK: - NSMenuDelegate (Dynamic Menu Construction)
 
-    // MARK: - NSMenuDelegate (Builds Dynamic Native Menu on Click)
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
 
         let store = BeeStore.shared
         store.loadLocalData()
 
-        // 1. Top Header Line (Styled like Maccy: "Select the clip you want to add to your clipboard")
-        let headerTitle = "Select a Bee conversation to copy or view"
-        let headerItem = NSMenuItem(title: headerTitle, action: nil, keyEquivalent: "")
+        // 1. Top Header Line
+        let headerItem = NSMenuItem(title: "Select a Bee conversation to copy or view", action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)
-
         menu.addItem(NSMenuItem.separator())
 
-        // 2. Conversation Items
+        // 2. Recent Conversation Items (up to 25)
         let conversations = Array(store.conversations.prefix(25))
         if conversations.isEmpty {
             let emptyItem = NSMenuItem(title: "No Bee records found in \(store.config.storageDir)", action: nil, keyEquivalent: "")
@@ -88,16 +105,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             menu.addItem(emptyItem)
         } else {
             for (index, conv) in conversations.enumerated() {
-                let menuItem = createConversationMenuItem(conv, index: index)
-                menu.addItem(menuItem)
+                menu.addItem(createConversationMenuItem(conv, index: index))
             }
         }
 
         menu.addItem(NSMenuItem.separator())
 
-        // 3. Settings & Controls at the Bottom
+        // 3. Settings & Sync Management Section
 
-        // A. Folder Link & Submenu
+        // A. Exports Folder Submenu
         let folderDisplay = store.config.storageDir.replacingOccurrences(
             of: FileManager.default.homeDirectoryForCurrentUser.path,
             with: "~"
@@ -117,7 +133,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         folderItem.submenu = folderSubmenu
         menu.addItem(folderItem)
 
-        // B. Bee Sync Status & Submenu
+        // B. Bee Sync Endpoint & Auth Submenu
         let syncStatusText = store.isConnected
             ? (store.config.endpoint.contains("8787") ? "Connected (Proxy 127.0.0.1:8787)" : "Connected (Cloud API)")
             : "Offline / Needs Setup"
@@ -152,7 +168,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let freqItem = NSMenuItem(title: "Update Frequency: \(freqText)", action: nil, keyEquivalent: "")
 
         let freqSubmenu = NSMenu()
-        let freqs: [(String, Int)] = [
+        let frequencies: [(String, Int)] = [
             ("Every 1 minute", 1),
             ("Every 5 minutes (Recommended)", 5),
             ("Every 15 minutes", 15),
@@ -160,7 +176,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             ("Weekly", 10080),
             ("Manual Only", 0)
         ]
-        for (label, val) in freqs {
+        for (label, val) in frequencies {
             let item = NSMenuItem(title: label, action: #selector(setFrequency(_:)), keyEquivalent: "")
             item.target = self
             item.tag = val
@@ -172,7 +188,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         freqItem.submenu = freqSubmenu
         menu.addItem(freqItem)
 
-        // D. Update Now & Update All
+        // D. Manual Sync Actions
         let updateNowTitle = store.isSyncing ? "Updating Records..." : "Update Now (Sync Recent Records)"
         let updateNowItem = NSMenuItem(title: updateNowTitle, action: #selector(updateNow), keyEquivalent: "r")
         updateNowItem.target = self
@@ -196,27 +212,25 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(quitItem)
     }
 
-    // MARK: - Conversation Item & Submenu Generator
+    // MARK: - Conversation Menu Item Builder
+
+    /// Builds a single conversation `NSMenuItem` displaying the first line of the summary,
+    /// attaching a right-side action submenu (`Copy Summary`, `Copy Transcript`, `Copy Gemini Summary`, file openers).
     private func createConversationMenuItem(_ conv: BeeConversationItem, index: Int) -> NSMenuItem {
         let cleanSummary = getCleanSummary(conv: conv)
         let firstLine = extractFirstLine(cleanSummary)
 
-        // Displays the first line of the summary on the line (like Maccy)
         let rawLine = firstLine.isEmpty ? conv.title : firstLine
         let lineTitle = formatSummaryLine(rawLine, maxLength: 52)
-
-        // Setup shortcut key ⌘0..⌘9 for top 10 items
         let keyEq = index < 10 ? "\(index)" : ""
 
-        // Selecting directly copies the summary to clipboard
         let item = NSMenuItem(title: lineTitle, action: #selector(copySummary(_:)), keyEquivalent: keyEq)
         item.target = self
         item.representedObject = conv
 
-        // Tooltip: Fallback hint
         let dateStr = conv.relativeDateString
         let durStr = conv.formattedDuration ?? ""
-        let turnsStr = (conv.utteranceCount != nil) ? "\(conv.utteranceCount!) turns" : ""
+        let turnsStr = conv.utteranceCount.map { "\($0) turns" } ?? ""
         let metaLine = [dateStr, durStr, turnsStr].filter { !$0.isEmpty }.joined(separator: " • ")
 
         item.toolTip = """
@@ -226,7 +240,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         \(cleanSummary)
         """
 
-        // Submenu on the right side: Copy Summary, Copy Transcript, Summarize with Gemini Flash Lite, etc.
+        // Action Submenu
         let submenu = NSMenu()
 
         let copySummaryItem = NSMenuItem(title: "Copy Summary", action: #selector(copySummary(_:)), keyEquivalent: "")
@@ -266,7 +280,9 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return item
     }
 
-    // MARK: - Actions for Conversations
+    // MARK: - Conversation Actions
+
+    /// Copies the original Bee summary (under `## Summary` without the audio transcript) to the system clipboard.
     @objc func copySummary(_ sender: NSMenuItem) {
         guard let conv = sender.representedObject as? BeeConversationItem else { return }
         let summaryText = extractOriginalBeeSummary(conv)
@@ -276,77 +292,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showNotification(title: "Summary Copied", body: "\(conv.title) summary copied to clipboard.")
     }
 
-    /// Extracts the summary from the original Bee record (c["summary"] in json),
-    /// taking the summary section up to the next heading or transcript.
-    private func extractOriginalBeeSummary(_ conv: BeeConversationItem) -> String {
-        let store = BeeStore.shared
-        var text = ""
-
-        // 1. Read directly from the original Bee JSON record
-        let jsonPath = conv.jsonPath(storageDir: store.config.storageDir)
-        if FileManager.default.fileExists(atPath: jsonPath),
-           let data = try? Data(contentsOf: URL(fileURLWithPath: jsonPath)),
-           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            let c = (json["conversation"] as? [String: Any]) ?? json
-            if let s = c["summary"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                text = s
-            } else if let s = c["short_summary"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                text = s
-            }
-        }
-
-        // 2. Fallback to markdown file if JSON is not available
-        if text.isEmpty {
-            let mdPath = conv.markdownPath(storageDir: store.config.storageDir)
-            if FileManager.default.fileExists(atPath: mdPath),
-               let mdContent = try? String(contentsOfFile: mdPath, encoding: .utf8) {
-                text = mdContent
-            }
-        }
-
-        if text.isEmpty {
-            return conv.summarySnippet ?? conv.title
-        }
-
-        // Strip any YAML frontmatter
-        if text.hasPrefix("---") {
-            let parts = text.components(separatedBy: "---")
-            if parts.count >= 3 {
-                text = parts.dropFirst(2).joined(separator: "---").trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-
-        // Strip transcript if attached
-        for marker in ["## 🎙️ Audio Transcript", "## 🎙️ Transcript", "## Audio Transcript", "## Transcript"] {
-            if let range = text.range(of: marker) {
-                text = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-
-        // Extract clean text under ## Summary / # Summary
-        let summaryHeadings = [
-            "## Summary\n", "## Summary\r\n",
-            "# Summary\n", "# Summary\r\n",
-            "### Summary\n", "### Summary\r\n",
-            "## 📋 Executive Summary\n", "## 📋 Executive Summary\r\n"
-        ]
-
-        for heading in summaryHeadings {
-            if let range = text.range(of: heading) {
-                var chunk = String(text[range.upperBound...])
-                if let nextHeading = chunk.range(of: "\n## ") ?? chunk.range(of: "\n# ") {
-                    chunk = String(chunk[..<nextHeading.lowerBound])
-                }
-                let cleaned = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !cleaned.isEmpty {
-                    return cleaned
-                }
-            }
-        }
-
-        return text.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
+    /// Copies the verbatim plain-text transcript (`transcripts/<id>_transcript.txt`) to the system clipboard.
     @objc func copyTranscript(_ sender: NSMenuItem) {
         guard let conv = sender.representedObject as? BeeConversationItem else { return }
         let store = BeeStore.shared
@@ -363,6 +309,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         showNotification(title: "Transcript Copied", body: "\(conv.title) transcript copied to clipboard.")
     }
 
+    /// Opens the floating `GeminiProgressModal` to summarize the conversation transcript with the selected Gemini model
+    /// and copies the complete response to the clipboard.
     @objc func summarizeWithGemini(_ sender: NSMenuItem) {
         guard let conv = sender.representedObject as? BeeConversationItem else { return }
         let store = BeeStore.shared
@@ -388,18 +336,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
 
-        let chosenModel = store.config.geminiModel
-
-        // Trigger interactive floating HUD modal with 3 states:
-        // 1. "Sending to Gemini..."
-        // 2. "Waiting..."
-        // 3. "Returned summary copied to clipboard!"
-        // and automatically copy entire Gemini response to NSPasteboard.general.
         GeminiProgressModal.shared.startSummarization(
             conv: conv,
             sourceText: sourceText,
             apiKey: apiKey,
-            model: chosenModel,
+            model: store.config.geminiModel,
             storageDir: store.config.storageDir
         )
     }
@@ -422,7 +363,123 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         store.revealInFinder(atPath: conv.transcriptTextPath(storageDir: store.config.storageDir))
     }
 
-    // MARK: - Actions for Settings & Management
+    // MARK: - Summary Parsing & Formatting Helpers
+
+    /// Extracts the clean summary section from the original Bee JSON record (`c["summary"]`)
+    /// or Markdown file, stripping YAML frontmatter and audio transcripts.
+    private func extractOriginalBeeSummary(_ conv: BeeConversationItem) -> String {
+        let store = BeeStore.shared
+        var text = ""
+
+        // 1. Read directly from the original Bee JSON record
+        let jsonPath = conv.jsonPath(storageDir: store.config.storageDir)
+        if FileManager.default.fileExists(atPath: jsonPath),
+           let data = try? Data(contentsOf: URL(fileURLWithPath: jsonPath)),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let c = (json["conversation"] as? [String: Any]) ?? json
+            if let s = c["summary"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                text = s
+            } else if let s = c["short_summary"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                text = s
+            }
+        }
+
+        // 2. Fallback to Markdown file if JSON is not available
+        if text.isEmpty {
+            let mdPath = conv.markdownPath(storageDir: store.config.storageDir)
+            if FileManager.default.fileExists(atPath: mdPath),
+               let mdContent = try? String(contentsOfFile: mdPath, encoding: .utf8) {
+                text = mdContent
+            }
+        }
+
+        if text.isEmpty {
+            return conv.summarySnippet ?? conv.title
+        }
+
+        // Strip YAML frontmatter
+        if text.hasPrefix("---") {
+            let parts = text.components(separatedBy: "---")
+            if parts.count >= 3 {
+                text = parts.dropFirst(2).joined(separator: "---").trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        // Strip verbatim transcript section if attached
+        for marker in ["## 🎙️ Audio Transcript", "## 🎙️ Transcript", "## Audio Transcript", "## Transcript"] {
+            if let range = text.range(of: marker) {
+                text = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        // Extract clean text under ## Summary / # Summary up to the next section heading
+        let summaryHeadings = [
+            "## Summary\n", "## Summary\r\n",
+            "# Summary\n", "# Summary\r\n",
+            "### Summary\n", "### Summary\r\n",
+            "## 📋 Executive Summary\n", "## 📋 Executive Summary\r\n"
+        ]
+
+        for heading in summaryHeadings {
+            if let range = text.range(of: heading) {
+                var chunk = String(text[range.upperBound...])
+                if let nextHeading = chunk.range(of: "\n## ") ?? chunk.range(of: "\n# ") {
+                    chunk = String(chunk[..<nextHeading.lowerBound])
+                }
+                let cleaned = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleaned.isEmpty {
+                    return cleaned
+                }
+            }
+        }
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Returns a clean summary string suitable for the hover preview panel and menu line extraction.
+    private func getCleanSummary(conv: BeeConversationItem) -> String {
+        let extracted = extractOriginalBeeSummary(conv)
+        return extracted
+            .replacingOccurrences(of: "## Summary", with: "")
+            .replacingOccurrences(of: "##", with: "")
+            .replacingOccurrences(of: "#", with: "")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Extracts the first non-empty content line from a summary block.
+    private func extractFirstLine(_ text: String) -> String {
+        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        for line in lines {
+            if !line.isEmpty && !line.hasPrefix("---") && !line.hasPrefix("id:") && !line.hasPrefix("title:") {
+                return line
+            }
+        }
+        return ""
+    }
+
+    /// Truncates a single-line summary string with an ellipsis if it exceeds `maxLength`.
+    private func formatSummaryLine(_ line: String, maxLength: Int) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > maxLength {
+            return String(trimmed.prefix(maxLength - 3)) + "..."
+        }
+        return trimmed
+    }
+
+    private func formatFrequency(_ mins: Int) -> String {
+        switch mins {
+        case 0: return "Manual Only"
+        case 1: return "Every 1 min"
+        case 5: return "Every 5 min"
+        case 15: return "Every 15 min"
+        case 1440: return "Daily (24h)"
+        case 10080: return "Weekly"
+        default: return "Every \(mins) min"
+        }
+    }
+
+    // MARK: - Settings & Sync Management Actions
+
     @objc func openFolderInFinder() {
         BeeStore.shared.openFolderInFinder()
     }
@@ -444,50 +501,16 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     @objc func switchToProxy() {
         var updated = BeeStore.shared.config
-        updated.endpoint = "http://127.0.0.1:8787"
+        updated.endpoint = BeeConfig.defaultEndpoint
         BeeStore.shared.updateConfig(updated)
         showNotification(title: "Bee Connection", body: "Switched to Local Proxy (127.0.0.1:8787).")
     }
 
     @objc func switchToPublicApi() {
         var updated = BeeStore.shared.config
-        updated.endpoint = "https://api.developer.bee.amazon.dev"
+        updated.endpoint = BeeConfig.publicCloudEndpoint
         BeeStore.shared.updateConfig(updated)
         showNotification(title: "Bee Connection", body: "Switched to Public API.")
-    }
-
-    @objc func promptForToken() {
-        NSApp.activate(ignoringOtherApps: true)
-        let alert = NSAlert()
-        alert.messageText = "Set Bee Developer Bearer Token"
-        alert.informativeText = "Paste your Bee developer Bearer token ($BEE_TOKEN):"
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 26))
-        input.stringValue = BeeStore.shared.config.token
-        input.placeholderString = "Paste token here..."
-        input.isEditable = true
-        input.isSelectable = true
-        alert.accessoryView = input
-
-        alert.addButton(withTitle: "Save")
-        alert.addButton(withTitle: "Paste from Clipboard")
-        alert.addButton(withTitle: "Cancel")
-
-        alert.window.initialFirstResponder = input
-
-        let resp = alert.runModal()
-        if resp == .alertFirstButtonReturn {
-            var updated = BeeStore.shared.config
-            updated.token = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            BeeStore.shared.updateConfig(updated)
-            showNotification(title: "Token Saved", body: "Bearer token updated.")
-        } else if resp == .alertSecondButtonReturn {
-            if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
-                var updated = BeeStore.shared.config
-                updated.token = clip
-                BeeStore.shared.updateConfig(updated)
-                showNotification(title: "Token Pasted & Saved", body: "Bearer token updated from clipboard.")
-            }
-        }
     }
 
     @objc func testConnection() {
@@ -535,9 +558,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             win.center()
             win.title = "BeeBar Preferences"
             win.isReleasedWhenClosed = false
-            win.contentView = NSHostingView(rootView: SettingsView(store: BeeStore.shared))
+            let rootView = SettingsView(store: BeeStore.shared) { [weak win] in
+                win?.close()
+            }
+            win.contentView = NSHostingView(rootView: rootView)
             self.preferencesWindow = win
         }
+        BeeStore.shared.showingSettings = true
         preferencesWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
@@ -546,56 +573,46 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         NSApp.terminate(nil)
     }
 
-    // MARK: - Helpers
-    private func formatFrequency(_ mins: Int) -> String {
-        switch mins {
-        case 0: return "Manual Only"
-        case 1: return "Every 1 min"
-        case 5: return "Every 5 min"
-        case 15: return "Every 15 min"
-        case 1440: return "Daily (24h)"
-        case 10080: return "Weekly"
-        default: return "Every \(mins) min"
-        }
-    }
+    // MARK: - User Prompts & Notifications
 
-    private func getCleanSummary(conv: BeeConversationItem) -> String {
-        var s = conv.summarySnippet ?? ""
-        if s.isEmpty {
-            let mdPath = conv.markdownPath(storageDir: BeeStore.shared.config.storageDir)
-            if let content = try? String(contentsOfFile: mdPath, encoding: .utf8) {
-                s = content
+    @objc func promptForToken() {
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.messageText = "Set Bee Developer Bearer Token"
+        alert.informativeText = "Paste your Bee developer Bearer token ($BEE_TOKEN):"
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 26))
+        input.stringValue = BeeStore.shared.config.token
+        input.placeholderString = "Paste token here..."
+        input.isEditable = true
+        input.isSelectable = true
+        alert.accessoryView = input
+
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Paste from Clipboard")
+        alert.addButton(withTitle: "Cancel")
+        alert.window.initialFirstResponder = input
+
+        let resp = alert.runModal()
+        if resp == .alertFirstButtonReturn {
+            var updated = BeeStore.shared.config
+            updated.token = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            BeeStore.shared.updateConfig(updated)
+            showNotification(title: "Token Saved", body: "Bearer token updated.")
+        } else if resp == .alertSecondButtonReturn {
+            if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
+                var updated = BeeStore.shared.config
+                updated.token = clip
+                BeeStore.shared.updateConfig(updated)
+                showNotification(title: "Token Pasted & Saved", body: "Bearer token updated from clipboard.")
             }
         }
-        return s.replacingOccurrences(of: "## Summary", with: "")
-                .replacingOccurrences(of: "##", with: "")
-                .replacingOccurrences(of: "#", with: "")
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private func extractFirstLine(_ text: String) -> String {
-        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-        for line in lines {
-            if !line.isEmpty && !line.hasPrefix("---") && !line.hasPrefix("id:") && !line.hasPrefix("title:") {
-                return line
-            }
-        }
-        return ""
-    }
-
-    private func formatSummaryLine(_ line: String, maxLength: Int) -> String {
-        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.count > maxLength {
-            return String(trimmed.prefix(maxLength - 3)) + "..."
-        }
-        return trimmed
     }
 
     private func promptForGeminiKey() -> String {
         NSApp.activate(ignoringOtherApps: true)
         let alert = NSAlert()
         alert.messageText = "Gemini API Key Needed"
-        alert.informativeText = "Paste your Google Gemini API key to enable instant Flash Lite summarization:"
+        alert.informativeText = "Paste your Google Gemini API key to enable instant AI summarization:"
         let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 340, height: 26))
         input.placeholderString = "Paste API key (AIzaSy...)"
         input.stringValue = BeeStore.shared.config.geminiApiKey
@@ -606,7 +623,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         alert.addButton(withTitle: "Save & Summarize")
         alert.addButton(withTitle: "Paste from Clipboard")
         alert.addButton(withTitle: "Cancel")
-
         alert.window.initialFirstResponder = input
 
         let resp = alert.runModal()
@@ -629,7 +645,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         return ""
     }
 
-    // MARK: - NSMenuDelegate (Hover / Highlight Left-Side Summary Preview)
+    private func showNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
+    }
+
+    // MARK: - NSMenuDelegate (Left-Side Hover Summary Preview)
+
     func menu(_ menu: NSMenu, willHighlight item: NSMenuItem?) {
         guard let item = item, let conv = item.representedObject as? BeeConversationItem else {
             SummaryPreviewPanel.shared.hide()
@@ -637,7 +663,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         let cleanSummary = getCleanSummary(conv: conv)
 
-        // Locate active menu window frame
+        // Locate the active NSMenu window frame on screen
         var menuFrame = NSRect.zero
         for w in NSApp.windows {
             let className = String(describing: type(of: w))
@@ -656,14 +682,5 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuDidClose(_ menu: NSMenu) {
         SummaryPreviewPanel.shared.hide()
-    }
-
-    private func showNotification(title: String, body: String) {
-        let content = UNMutableNotificationContent()
-        content.title = title
-        content.body = body
-        content.sound = .default
-        let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 }
