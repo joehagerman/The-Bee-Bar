@@ -7,6 +7,7 @@ public struct BeeConfig: Codable, Sendable {
     public var syncIntervalMinutes: Int
     public var lastSyncedAt: Double?
     public var geminiApiKey: String
+    public var geminiModel: String
 
     public init(
         endpoint: String = "http://127.0.0.1:8787",
@@ -14,7 +15,8 @@ public struct BeeConfig: Codable, Sendable {
         storageDir: String = "",
         syncIntervalMinutes: Int = 5,
         lastSyncedAt: Double? = nil,
-        geminiApiKey: String = ""
+        geminiApiKey: String = "",
+        geminiModel: String = "gemini-2.5-flash"
     ) {
         self.endpoint = endpoint
         self.token = token
@@ -22,6 +24,7 @@ public struct BeeConfig: Codable, Sendable {
         self.syncIntervalMinutes = syncIntervalMinutes
         self.lastSyncedAt = lastSyncedAt
         self.geminiApiKey = geminiApiKey
+        self.geminiModel = geminiModel.isEmpty ? "gemini-2.5-flash" : geminiModel
     }
 }
 
@@ -53,6 +56,7 @@ public final class ConfigManager: Sendable {
                 var syncIntervalMinutes: Int?
                 var lastSyncedAt: Double?
                 var geminiApiKey: String?
+                var geminiModel: String?
             }
             let decoded = try JSONDecoder().decode(PartialConfig.self, from: data)
             let defaultStorage = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Bee Exports").path
@@ -62,7 +66,8 @@ public final class ConfigManager: Sendable {
                 storageDir: decoded.storageDir ?? defaultStorage,
                 syncIntervalMinutes: decoded.syncIntervalMinutes ?? 5,
                 lastSyncedAt: decoded.lastSyncedAt,
-                geminiApiKey: decoded.geminiApiKey ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? ""
+                geminiApiKey: decoded.geminiApiKey ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? "",
+                geminiModel: decoded.geminiModel ?? "gemini-2.5-flash"
             )
         } catch {
             return BeeConfig()
@@ -83,6 +88,7 @@ public final class ConfigManager: Sendable {
             existingDict["storageDir"] = config.storageDir
             existingDict["syncIntervalMinutes"] = config.syncIntervalMinutes
             existingDict["geminiApiKey"] = config.geminiApiKey
+            existingDict["geminiModel"] = config.geminiModel
             if let last = config.lastSyncedAt {
                 existingDict["lastSyncedAt"] = last
             }

@@ -9,6 +9,10 @@ struct SettingsView: View {
     @State private var storageDir: String = ""
     @State private var syncInterval: Int = 5
     @State private var geminiApiKey: String = ""
+    @State private var geminiModel: String = "gemini-2.5-flash"
+    @State private var availableModels: [GeminiModelInfo] = []
+    @State private var isLoadingModels: Bool = false
+    @State private var modelLoadStatus: String? = nil
     @State private var isShowingToken: Bool = false
     @State private var isShowingGeminiKey: Bool = false
     @State private var testResultText: String? = nil
@@ -122,16 +126,17 @@ struct SettingsView: View {
                         }
                     }
 
-                    // Gemini API Key
-                    VStack(alignment: .leading, spacing: 4) {
+                    // Gemini API Key & Model Configuration
+                    VStack(alignment: .leading, spacing: 6) {
                         HStack {
-                            Text("Google Gemini API Key (Flash Lite)")
+                            Text("Google Gemini API Key")
                                 .font(.subheadline)
                                 .fontWeight(.medium)
                             Spacer()
                             Button("Paste") {
                                 if let clip = NSPasteboard.general.string(forType: .string)?.trimmingCharacters(in: .whitespacesAndNewlines), !clip.isEmpty {
                                     self.geminiApiKey = clip
+                                    fetchModels()
                                 }
                             }
                             .buttonStyle(.borderless)
@@ -147,15 +152,58 @@ struct SettingsView: View {
                         }
 
                         if isShowingGeminiKey {
-                            TextField("AIzaSy... (for 1-click Flash Lite summarization)", text: $geminiApiKey)
+                            TextField("Paste key (AIzaSy...)", text: $geminiApiKey)
                                 .textFieldStyle(.roundedBorder)
                         } else {
-                            SecureField("AIzaSy... (for 1-click Flash Lite summarization)", text: $geminiApiKey)
+                            SecureField("Paste key (AIzaSy...)", text: $geminiApiKey)
                                 .textFieldStyle(.roundedBorder)
                         }
-                        Text("Used when selecting 'Summarize with Gemini Flash Lite' on any conversation.")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+
+                        // Model Selector
+                        HStack {
+                            Text("Gemini Model Version")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                            Spacer()
+                            if isLoadingModels {
+                                ProgressView().controlSize(.small)
+                            } else {
+                                Button("Fetch Models") {
+                                    fetchModels()
+                                }
+                                .buttonStyle(.borderless)
+                                .font(.caption)
+                                .foregroundColor(.accentColor)
+                            }
+                        }
+                        .padding(.top, 4)
+
+                        Picker("", selection: $geminiModel) {
+                            if availableModels.isEmpty {
+                                Text("Gemini 2.5 Flash (Default)").tag("gemini-2.5-flash")
+                                Text("Gemini 2.5 Pro").tag("gemini-2.5-pro")
+                                Text("Gemini 2.0 Flash").tag("gemini-2.0-flash")
+                                Text("Gemini 2.0 Flash Lite").tag("gemini-2.0-flash-lite")
+                                Text("Gemini 1.5 Flash").tag("gemini-1.5-flash")
+                                Text("Gemini 1.5 Pro").tag("gemini-1.5-pro")
+                            } else {
+                                ForEach(availableModels) { m in
+                                    Text(m.readableName).tag(m.shortId)
+                                }
+                            }
+                        }
+                        .labelsHidden()
+                        .pickerStyle(.menu)
+
+                        if let status = modelLoadStatus {
+                            Text(status)
+                                .font(.caption2)
+                                .foregroundColor(status.contains("Loaded") ? .secondary : .orange)
+                        } else {
+                            Text("Click 'Fetch Models' to load all available versions for your key.")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     // Sync Interval
@@ -234,6 +282,44 @@ struct SettingsView: View {
             self.storageDir = store.config.storageDir
             self.syncInterval = store.config.syncIntervalMinutes
             self.geminiApiKey = store.config.geminiApiKey
+            self.geminiModel = store.config.geminiModel
+            if !self.geminiApiKey.isEmpty {
+                fetchModels()
+            }
+        }
+    }
+
+    private func fetchModels() {
+        let key = geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            modelLoadStatus = "Enter an API key first."
+            return
+        }
+        isLoadingModels = true
+        modelLoadStatus = "Querying available models..."
+        Task {
+            do {
+                let models = try await GeminiService.shared.fetchAvailableModels(apiKey: key)
+                await MainActor.run {
+                    self.isLoadingModels = false
+                    self.availableModels = models
+                    if !models.isEmpty {
+                        self.modelLoadStatus = "Loaded \(models.count) generation models from Google API"
+                        if !models.contains(where: { $0.shortId == self.geminiModel }) {
+                            if let first = models.first {
+                                self.geminiModel = first.shortId
+                            }
+                        }
+                    } else {
+                        self.modelLoadStatus = "No text models returned. Using default."
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    self.isLoadingModels = false
+                    self.modelLoadStatus = "Could not list models: \(error.localizedDescription)"
+                }
+            }
         }
     }
 
@@ -277,6 +363,7 @@ struct SettingsView: View {
         updated.storageDir = storageDir.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.syncIntervalMinutes = syncInterval
         updated.geminiApiKey = geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        updated.geminiModel = geminiModel.trimmingCharacters(in: .whitespacesAndNewlines)
         store.updateConfig(updated)
         store.showingSettings = false
     }

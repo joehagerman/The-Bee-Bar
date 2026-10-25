@@ -223,7 +223,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         copyTranscriptItem.representedObject = conv
         submenu.addItem(copyTranscriptItem)
 
-        let geminiItem = NSMenuItem(title: "Summarize with Gemini Flash Lite", action: #selector(summarizeWithGemini(_:)), keyEquivalent: "")
+        let modelName = BeeStore.shared.config.geminiModel
+        let geminiItem = NSMenuItem(title: "Summarize with Gemini (\(modelName))", action: #selector(summarizeWithGemini(_:)), keyEquivalent: "")
         geminiItem.target = self
         geminiItem.representedObject = conv
         submenu.addItem(geminiItem)
@@ -303,21 +304,22 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             sourceText = conv.summarySnippet ?? conv.title
         }
 
-        showNotification(title: "Gemini Flash Lite", body: "Generating executive brief for \"\(conv.title)\"...")
+        let chosenModel = store.config.geminiModel
+        showNotification(title: "Gemini (\(chosenModel))", body: "Generating executive brief for \"\(conv.title)\"...")
 
         Task {
             do {
-                let flashSummary = try await GeminiService.shared.summarize(text: sourceText, apiKey: apiKey)
+                let flashSummary = try await GeminiService.shared.summarize(text: sourceText, apiKey: apiKey, model: chosenModel)
 
                 await MainActor.run {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(flashSummary, forType: .string)
 
-                    let outPath = (store.config.storageDir as NSString).appendingPathComponent("conversations/\(conv.id)_gemini_flash.md")
+                    let outPath = (store.config.storageDir as NSString).appendingPathComponent("conversations/\(conv.id)_gemini_brief.md")
                     try? flashSummary.write(toFile: outPath, atomically: true, encoding: .utf8)
 
                     self.showNotification(
-                        title: "⚡ Gemini Flash Lite Brief Ready",
+                        title: "Gemini Brief Ready (\(chosenModel))",
                         body: "Copied to clipboard and saved to exports folder."
                     )
                 }
