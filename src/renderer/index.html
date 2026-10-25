@@ -40,35 +40,40 @@
         <div class="sidebar-section">
           <div class="section-label">Bee Data</div>
           <ul class="nav-list">
-            <li class="nav-item active" data-view="conversations">
+            <li class="nav-item active" data-view="conversations" id="navItemConversations">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-              <span>Conversations & Transcripts</span>
+              <span>Conversations</span>
               <span class="nav-badge" id="badgeConversations">0</span>
             </li>
-            <li class="nav-item" data-view="daily">
+            <li class="nav-item" data-view="transcripts" id="navItemTranscripts">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+              <span>Verbatim Transcripts</span>
+              <span class="nav-badge" id="badgeTranscripts">0</span>
+            </li>
+            <li class="nav-item" data-view="daily" id="navItemDaily">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
               <span>Daily Summaries</span>
               <span class="nav-badge" id="badgeDaily">0</span>
             </li>
-            <li class="nav-item" data-view="journals">
-              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-              <span>Journals</span>
-              <span class="nav-badge" id="badgeJournals">0</span>
-            </li>
-            <li class="nav-item" data-view="todos">
+            <li class="nav-item" data-view="todos" id="navItemTodos">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
               <span>Action Items & Todos</span>
               <span class="nav-badge" id="badgeTodos">0</span>
             </li>
-            <li class="nav-item" data-view="facts">
+            <li class="nav-item" data-view="facts" id="navItemFacts">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-              <span>Memory Bank & Facts</span>
+              <span>Memory Bank</span>
               <span class="nav-badge" id="badgeFacts">0</span>
             </li>
-            <li class="nav-item" data-view="insights">
+            <li class="nav-item" data-view="insights" id="navItemInsights">
               <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-              <span>AI Insights & Patterns</span>
+              <span>AI Behavioral Patterns</span>
               <span class="nav-badge" id="badgeInsights">0</span>
+            </li>
+            <li class="nav-item" data-view="journals" id="navItemJournals">
+              <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+              <span>Journals & Memos</span>
+              <span class="nav-badge" id="badgeJournals">0</span>
             </li>
           </ul>
         </div>
@@ -116,6 +121,24 @@
               <svg class="icon search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
               <input type="text" id="searchInput" placeholder="Filter current list..." class="input-search">
             </div>
+
+            <!-- Grouping and Topic Controls (for Conversations / Transcripts) -->
+            <div class="list-controls-row" id="listControlsRow">
+              <div class="group-select-wrapper">
+                <label class="group-label">Group By:</label>
+                <select id="selectGroupBy" class="select-group-by">
+                  <option value="none">Newest First</option>
+                  <option value="topic">Topic Cluster</option>
+                  <option value="month">Month / Date</option>
+                  <option value="location">Location</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Horizontal Scrollable Topic Filter Bar -->
+            <div class="topic-filter-bar" id="topicFilterBar">
+              <!-- Dynamically rendered topic pills (e.g. All, Data Centers, Energy, Minerals, Nuclear...) -->
+            </div>
           </div>
 
           <div class="items-list" id="itemsList">
@@ -151,6 +174,10 @@
                 <span class="detail-duration" id="detailDuration"></span>
               </div>
               <div class="detail-actions">
+                <button id="btnOpenTxt" class="btn btn-primary btn-sm" title="Open pure verbatim transcript text (.txt)">
+                  <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                  <span>Transcript .txt</span>
+                </button>
                 <button id="btnOpenMd" class="btn btn-outline btn-sm" title="Open Markdown file in default app (Obsidian, Mac Notes, etc.)">
                   <svg class="icon icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
                   <span>Open .md</span>
@@ -175,6 +202,9 @@
               <div class="detail-id-row">
                 <span class="id-label">ID:</span>
                 <code id="detailId">conv-12345</code>
+              </div>
+              <div class="detail-keywords-row" id="detailKeywordsRow" style="display: none;">
+                <!-- Tag badges rendered dynamically -->
               </div>
             </div>
 
@@ -228,6 +258,17 @@
                   </div>
                   <div class="transcript-timeline" id="detailTranscriptTimeline">
                     <!-- Utterance turns rendered here -->
+                  </div>
+                </div>
+
+                <!-- Related Conversations Grouped by Topic -->
+                <div class="content-card related-convs-card" id="cardRelatedConvs" style="display: none;">
+                  <div class="card-header">
+                    <span class="card-icon">🔗</span>
+                    <h3>Related Conversations on this Topic</h3>
+                  </div>
+                  <div class="related-convs-list" id="detailRelatedConvsList">
+                    <!-- Similar conversations listed here -->
                   </div>
                 </div>
               </div>
@@ -316,7 +357,64 @@
             </div>
 
             <div class="settings-card">
-              <h3>📂 Local Storage & Backup Location</h3>
+              <h3>👁️ Sidebar Folders &amp; Visibility</h3>
+              <p class="settings-desc">Customize which folders and categories appear in the left sidebar navigation.</p>
+              
+              <div class="visibility-toggles-grid">
+                <label class="toggle-row">
+                  <input type="checkbox" id="settingShowConversations" checked>
+                  <span class="toggle-info">
+                    <strong>Conversations</strong>
+                    <small>Synthesized conversations, executive summaries, and action items</small>
+                  </span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" id="settingShowTranscripts" checked>
+                  <span class="toggle-info">
+                    <strong>Verbatim Transcripts</strong>
+                    <small>Direct access to pure utterance transcripts (.txt and .md)</small>
+                  </span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" id="settingShowDaily" checked>
+                  <span class="toggle-info">
+                    <strong>Daily Executive Summaries</strong>
+                    <small>Comprehensive daily recaps and day-level synthesis</small>
+                  </span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" id="settingShowTodos" checked>
+                  <span class="toggle-info">
+                    <strong>Action Items &amp; Todos</strong>
+                    <small>Extracted tasks, commitments, alarms, and deadlines</small>
+                  </span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" id="settingShowFacts" checked>
+                  <span class="toggle-info">
+                    <strong>Memory Bank</strong>
+                    <small>Personal facts, preferences, background, and life details</small>
+                  </span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" id="settingShowInsights" checked>
+                  <span class="toggle-info">
+                    <strong>AI Behavioral Patterns</strong>
+                    <small>Behavioral feedback, communication style, and habits</small>
+                  </span>
+                </label>
+                <label class="toggle-row">
+                  <input type="checkbox" id="settingShowJournals" checked>
+                  <span class="toggle-info">
+                    <strong>Journals &amp; Memos</strong>
+                    <small>Personal reflections, audio journals, and thought memos</small>
+                  </span>
+                </label>
+              </div>
+            </div>
+
+            <div class="settings-card">
+              <h3>📂 Local Storage &amp; Backup Location</h3>
               <p class="settings-desc">All downloaded transcripts, executive summaries, journals, and raw JSON payloads are written here.</p>
 
               <div class="form-group">

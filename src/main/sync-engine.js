@@ -17,7 +17,10 @@ const {
   formatJournalMarkdown,
   formatTodosMarkdown,
   formatFactsMarkdown,
-  formatInsightsMarkdown
+  formatInsightsMarkdown,
+  formatPureTranscriptText,
+  formatPureTranscriptMarkdown,
+  classifyConversation
 } = require('./markdown-formatter');
 
 class BeeSyncEngine {
@@ -82,6 +85,7 @@ class BeeSyncEngine {
     const dirs = [
       this.storageDir,
       path.join(this.storageDir, 'conversations'),
+      path.join(this.storageDir, 'transcripts'),
       path.join(this.storageDir, 'daily'),
       path.join(this.storageDir, 'journals'),
       path.join(this.storageDir, 'todos'),
@@ -455,13 +459,28 @@ class BeeSyncEngine {
             (fullConv.summary ? fullConv.summary.replace(/^#+\s*/, '').split('\n')[0].slice(0, 80) : '') || 
             `Conversation ${safeId}`;
 
+          const { tags, keywords } = classifyConversation(fullConv);
+
+          // Always ensure dedicated transcript files exist
+          const txtTranscriptPath = path.join(this.storageDir, 'transcripts', `${safeId}_transcript.txt`);
+          const mdTranscriptPath = path.join(this.storageDir, 'transcripts', `${safeId}_transcript.md`);
+          if (!fs.existsSync(txtTranscriptPath) || force) {
+            fs.writeFileSync(txtTranscriptPath, formatPureTranscriptText(fullConv));
+          }
+          if (!fs.existsSync(mdTranscriptPath) || force) {
+            fs.writeFileSync(mdTranscriptPath, formatPureTranscriptMarkdown(fullConv));
+          }
+
           indexData.conversations.push({
             id: safeId,
             title: cTitle,
             created_at: fullConv.start_time || fullConv.created_at || fullConv.timestamp,
             duration_ms: durMs,
             summarySnippet: (fullConv.summary || fullConv.short_summary || '').slice(0, 200).replace(/\n/g, ' '),
-            utteranceCount: utterances.length
+            utteranceCount: utterances.length,
+            tags,
+            keywords,
+            location: fullConv.primary_location?.address || null
           });
           cCount++;
 
@@ -506,13 +525,16 @@ class BeeSyncEngine {
     this.cancelRequested = true;
   }
 
-  loadLocalData() {
+  loadLocalData(forceRebuild = false) {
     this.ensureDirectories();
     const metaPath = path.join(this.storageDir, 'metadata.json');
-    if (fs.existsSync(metaPath)) {
+    if (!forceRebuild && fs.existsSync(metaPath)) {
       try {
         const raw = fs.readFileSync(metaPath, 'utf8');
-        return JSON.parse(raw);
+        const parsed = JSON.parse(raw);
+        if (parsed.conversations && parsed.conversations.length > 0 && parsed.conversations[0].tags) {
+          return parsed;
+        }
       } catch (e) {}
     }
 
@@ -542,13 +564,28 @@ class BeeSyncEngine {
             (c.summary ? c.summary.replace(/^#+\s*/, '').split('\n')[0].slice(0, 80) : '') || 
             `Conversation ${safeId}`;
 
+          const { tags, keywords } = classifyConversation(c);
+
+          // Ensure transcript files are created if missing
+          const txtTranscriptPath = path.join(this.storageDir, 'transcripts', `${safeId}_transcript.txt`);
+          const mdTranscriptPath = path.join(this.storageDir, 'transcripts', `${safeId}_transcript.md`);
+          if (!fs.existsSync(txtTranscriptPath)) {
+            try { fs.writeFileSync(txtTranscriptPath, formatPureTranscriptText(c)); } catch (e) {}
+          }
+          if (!fs.existsSync(mdTranscriptPath)) {
+            try { fs.writeFileSync(mdTranscriptPath, formatPureTranscriptMarkdown(c)); } catch (e) {}
+          }
+
           indexData.conversations.push({
             id: safeId,
             title: cTitle,
             created_at: c.start_time || c.created_at || c.timestamp,
             duration_ms: durMs,
             summarySnippet: (c.summary || c.short_summary || '').slice(0, 200).replace(/\n/g, ' '),
-            utteranceCount: utterances.length
+            utteranceCount: utterances.length,
+            tags,
+            keywords,
+            location: c.primary_location?.address || null
           });
         } catch(e) {}
       }
@@ -634,16 +671,21 @@ class BeeSyncEngine {
   }
 
   getItemFile(type, id) {
-    const validTypes = ['conversations', 'daily', 'journals', 'insights'];
+    const validTypes = ['conversations', 'transcripts', 'daily', 'journals', 'insights'];
     if (!validTypes.includes(type)) {
       throw new Error(`Invalid type: ${type}`);
     }
     const safeId = String(id).replace(/[^a-zA-Z0-9_-]/g, '_');
-    const jsonPath = path.join(this.storageDir, type, `${safeId}.json`);
-    const mdPath = path.join(this.storageDir, type, `${safeId}.md`);
+
+    let jsonPath = path.join(this.storageDir, type === 'transcripts' ? 'conversations' : type, `${safeId}.json`);
+    let mdPath = type === 'transcripts'
+      ? path.join(this.storageDir, 'transcripts', `${safeId}_transcript.md`)
+      : path.join(this.storageDir, type, `${safeId}.md`);
+    let txtPath = path.join(this.storageDir, 'transcripts', `${safeId}_transcript.txt`);
 
     let jsonData = null;
     let markdownData = null;
+    let textData = null;
 
     if (fs.existsSync(jsonPath)) {
       try {
@@ -657,13 +699,21 @@ class BeeSyncEngine {
       } catch (e) {}
     }
 
+    if (fs.existsSync(txtPath)) {
+      try {
+        textData = fs.readFileSync(txtPath, 'utf8');
+      } catch (e) {}
+    }
+
     return {
       id: safeId,
       type,
       jsonPath,
       mdPath,
+      txtPath,
       jsonData,
-      markdownData
+      markdownData,
+      textData
     };
   }
 

@@ -316,6 +316,168 @@ function formatInsightsMarkdown(rawInsights) {
   return md;
 }
 
+function formatPureTranscriptText(rawConv) {
+  const conv = rawConv.conversation || rawConv;
+  const title = conv.short_summary || conv.title || `Conversation ${conv.id || ''}`;
+  const dateStr = formatDate(conv.start_time || conv.created_at || conv.timestamp);
+  const durMs = conv.duration_ms || (conv.end_time && conv.start_time ? (conv.end_time - conv.start_time) : null);
+  const durationStr = durMs ? formatDuration(durMs) : 'N/A';
+  const utterances = getUtterances(conv);
+
+  let out = `================================================================================\n`;
+  out += `TRANSCRIPT: ${title}\n`;
+  out += `ID: ${conv.id || 'N/A'}\n`;
+  out += `Date: ${dateStr}\n`;
+  out += `Duration: ${durationStr}\n`;
+  if (conv.primary_location && conv.primary_location.address) {
+    out += `Location: ${conv.primary_location.address}\n`;
+  }
+  out += `Total Utterances: ${utterances.length}\n`;
+  out += `================================================================================\n\n`;
+
+  if (utterances.length === 0) {
+    out += `[No verbatim utterances captured for this session]\n`;
+    return out;
+  }
+
+  for (const u of utterances) {
+    const speaker = u.speaker || 'Unknown';
+    let time = '';
+    if (u.spoken_at) {
+      time = ` [${new Date(Number(u.spoken_at)).toLocaleTimeString()}]`;
+    } else if (u.start !== undefined && u.start !== null) {
+      const mins = Math.floor(u.start / 60);
+      const secs = Math.floor(u.start % 60).toString().padStart(2, '0');
+      time = ` [${mins}:${secs}]`;
+    }
+    out += `${speaker}${time}: ${u.text || ''}\n\n`;
+  }
+
+  return out;
+}
+
+function formatPureTranscriptMarkdown(rawConv) {
+  const conv = rawConv.conversation || rawConv;
+  const title = conv.short_summary || conv.title || `Conversation ${conv.id || ''}`;
+  const dateStr = formatDate(conv.start_time || conv.created_at || conv.timestamp);
+  const durMs = conv.duration_ms || (conv.end_time && conv.start_time ? (conv.end_time - conv.start_time) : null);
+  const durationStr = durMs ? formatDuration(durMs) : 'N/A';
+  const utterances = getUtterances(conv);
+
+  let md = `---
+id: "${conv.id || ''}"
+title: "Transcript: ${title.replace(/"/g, '\\"')}"
+date: "${dateStr}"
+duration: "${durationStr}"
+type: transcript
+source: bee.computer
+utterances_count: ${utterances.length}
+---
+
+# 🎙️ Verbatim Transcript: ${title}
+
+- **Date:** ${dateStr}
+- **Duration:** ${durationStr}
+- **Session ID:** \`${conv.id || 'N/A'}\`
+${conv.primary_location && conv.primary_location.address ? `- **Location:** ${conv.primary_location.address}\n` : ''}
+- **Total Turns:** ${utterances.length}
+
+---
+
+`;
+
+  if (utterances.length === 0) {
+    md += `*No verbatim utterances captured for this session.*\n`;
+    return md;
+  }
+
+  for (const u of utterances) {
+    const speaker = u.speaker || 'Unknown';
+    const isUser = speaker.toLowerCase().includes('you') || speaker.toLowerCase().includes('user');
+    const isBee = speaker.toLowerCase().includes('bee');
+    const icon = isUser ? '👤' : (isBee ? '🐝' : '🗣️');
+    
+    let time = '';
+    if (u.spoken_at) {
+      time = `*(${new Date(Number(u.spoken_at)).toLocaleTimeString()})*`;
+    } else if (u.start !== undefined && u.start !== null) {
+      const mins = Math.floor(u.start / 60);
+      const secs = Math.floor(u.start % 60).toString().padStart(2, '0');
+      time = `*(${mins}:${secs})*`;
+    }
+
+    md += `### ${icon} **${speaker}** ${time}\n\n`;
+    md += `> ${(u.text || '').replace(/\n/g, '\n> ')}\n\n`;
+  }
+
+  return md;
+}
+
+function classifyConversation(rawConv) {
+  const conv = rawConv.conversation || rawConv;
+  const title = conv.short_summary || conv.title || '';
+  const summary = conv.summary || '';
+  const text = (title + ' ' + summary).toLowerCase();
+  
+  const tags = [];
+  const keywords = [];
+
+  // Categorical topics
+  if (text.includes('data center') || text.includes('datacenter') || text.includes('hyperscaler')) {
+    tags.push('Data Centers');
+    keywords.push('Data Centers');
+  }
+  if (text.includes('critical mineral') || text.includes('lithium') || text.includes('brine') || text.includes('rare earth')) {
+    tags.push('Critical Minerals');
+    keywords.push('Critical Minerals');
+  }
+  if (text.includes('nuclear') || text.includes('curio') || text.includes('reactor') || text.includes('fusion')) {
+    tags.push('Nuclear Energy');
+    keywords.push('Nuclear');
+  }
+  if (text.includes('resilien') || text.includes('storm') || text.includes('fern') || text.includes('outage')) {
+    tags.push('Grid Resilience');
+    keywords.push('Resilience');
+  }
+  if (text.includes('grant') || text.includes('eecbg') || text.includes('contract') || text.includes('sow') || text.includes('subaward') || text.includes('rebate')) {
+    tags.push('Grants & Contracts');
+    keywords.push('Grants');
+  }
+  if (text.includes('conference') || text.includes('panel') || text.includes('nasio') || text.includes('naseo') || text.includes('sseb') || text.includes('summit')) {
+    tags.push('Conferences & Panels');
+    keywords.push('Conferences');
+  }
+  if (text.includes('campus') || text.includes('sat') || text.includes('college') || text.includes('school') || text.includes('son') || text.includes('family') || text.includes('trip') || text.includes('travel')) {
+    tags.push('Family & Personal');
+    keywords.push('Personal');
+  }
+  if (text.includes('energy') || text.includes('utility') || text.includes('grid') || text.includes('power') || text.includes('transformer')) {
+    if (!tags.includes('Grid Resilience') && !tags.includes('Data Centers') && !tags.includes('Nuclear Energy')) {
+      tags.push('Energy & Infrastructure');
+      keywords.push('Energy');
+    }
+  }
+
+  if (tags.length === 0) tags.push('General Work');
+
+  // Key entities
+  if (text.includes('nasio') || text.includes('naseo')) keywords.push('NASIO');
+  if (text.includes('sseb')) keywords.push('SSEB');
+  if (text.includes('curio')) keywords.push('Curio');
+  if (text.includes('hitachi')) keywords.push('Hitachi');
+  if (text.includes('aecom')) keywords.push('AECOM');
+  if (text.includes('epa')) keywords.push('EPA');
+  if (text.includes('biloxi')) keywords.push('Biloxi');
+  if (text.includes('pascagoula')) keywords.push('Pascagoula');
+  if (text.includes('collins')) keywords.push('Collins');
+  if (text.includes('fern')) keywords.push('Storm Fern');
+
+  return {
+    tags,
+    keywords: Array.from(new Set(keywords))
+  };
+}
+
 module.exports = {
   formatDate,
   formatDuration,
@@ -325,5 +487,8 @@ module.exports = {
   formatJournalMarkdown,
   formatTodosMarkdown,
   formatFactsMarkdown,
-  formatInsightsMarkdown
+  formatInsightsMarkdown,
+  formatPureTranscriptText,
+  formatPureTranscriptMarkdown,
+  classifyConversation
 };

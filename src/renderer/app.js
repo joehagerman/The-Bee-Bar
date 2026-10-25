@@ -7,13 +7,16 @@ const state = {
   activeView: 'conversations',
   currentTab: 'synthesized',
   selectedItem: null,
+  selectedTopic: 'All',
+  groupBy: 'none',
   config: {},
   localData: {
     conversations: [],
     daily: [],
     journals: [],
     todos: [],
-    facts: []
+    facts: [],
+    insights: []
   },
   currentItemDetail: null
 };
@@ -23,11 +26,19 @@ const el = {
   // Navigation
   navItems: document.querySelectorAll('.nav-item'),
   badgeConversations: document.getElementById('badgeConversations'),
+  badgeTranscripts: document.getElementById('badgeTranscripts'),
   badgeDaily: document.getElementById('badgeDaily'),
   badgeJournals: document.getElementById('badgeJournals'),
   badgeTodos: document.getElementById('badgeTodos'),
   badgeFacts: document.getElementById('badgeFacts'),
   badgeInsights: document.getElementById('badgeInsights'),
+  navItemConversations: document.getElementById('navItemConversations'),
+  navItemTranscripts: document.getElementById('navItemTranscripts'),
+  navItemDaily: document.getElementById('navItemDaily'),
+  navItemTodos: document.getElementById('navItemTodos'),
+  navItemFacts: document.getElementById('navItemFacts'),
+  navItemInsights: document.getElementById('navItemInsights'),
+  navItemJournals: document.getElementById('navItemJournals'),
   sidebarStoragePath: document.getElementById('sidebarStoragePath'),
   btnOpenFolderSidebar: document.getElementById('btnOpenFolderSidebar'),
   btnAccountBadge: document.getElementById('btnAccountBadge'),
@@ -48,6 +59,9 @@ const el = {
   listCount: document.getElementById('listCount'),
   searchInput: document.getElementById('searchInput'),
   itemsList: document.getElementById('itemsList'),
+  listControlsRow: document.getElementById('listControlsRow'),
+  selectGroupBy: document.getElementById('selectGroupBy'),
+  topicFilterBar: document.getElementById('topicFilterBar'),
 
   // Detail Pane
   detailPlaceholder: document.getElementById('detailPlaceholder'),
@@ -57,6 +71,7 @@ const el = {
   detailDuration: document.getElementById('detailDuration'),
   detailTitle: document.getElementById('detailTitle'),
   detailId: document.getElementById('detailId'),
+  detailKeywordsRow: document.getElementById('detailKeywordsRow'),
   cardExecutiveSummary: document.getElementById('cardExecutiveSummary'),
   detailExecutiveSummary: document.getElementById('detailExecutiveSummary'),
   cardHighlights: document.getElementById('cardHighlights'),
@@ -66,6 +81,9 @@ const el = {
   cardTranscript: document.getElementById('cardTranscript'),
   detailTranscriptTimeline: document.getElementById('detailTranscriptTimeline'),
   detailUtteranceCount: document.getElementById('detailUtteranceCount'),
+  cardRelatedConvs: document.getElementById('cardRelatedConvs'),
+  detailRelatedConvsList: document.getElementById('detailRelatedConvsList'),
+  btnOpenTxt: document.getElementById('btnOpenTxt'),
   btnOpenMd: document.getElementById('btnOpenMd'),
   btnOpenJson: document.getElementById('btnOpenJson'),
   btnRevealFile: document.getElementById('btnRevealFile'),
@@ -94,6 +112,13 @@ const el = {
   btnOpenStorageFinder: document.getElementById('btnOpenStorageFinder'),
   btnExportZip: document.getElementById('btnExportZip'),
   btnLoadDemo: document.getElementById('btnLoadDemo'),
+  settingShowConversations: document.getElementById('settingShowConversations'),
+  settingShowTranscripts: document.getElementById('settingShowTranscripts'),
+  settingShowDaily: document.getElementById('settingShowDaily'),
+  settingShowTodos: document.getElementById('settingShowTodos'),
+  settingShowFacts: document.getElementById('settingShowFacts'),
+  settingShowInsights: document.getElementById('settingShowInsights'),
+  settingShowJournals: document.getElementById('settingShowJournals'),
 
   // Global Search
   bigSearchInput: document.getElementById('bigSearchInput'),
@@ -186,6 +211,61 @@ async function loadAppConfig() {
     if (custRadio) custRadio.checked = true;
     el.groupEndpoint.style.display = 'flex';
   }
+
+  // Load and apply sidebar visibility settings
+  const vis = state.config.sidebarVisibility || {
+    conversations: true,
+    transcripts: true,
+    daily: true,
+    todos: true,
+    facts: true,
+    insights: true,
+    journals: true
+  };
+  applySidebarVisibility(vis);
+}
+
+function applySidebarVisibility(vis) {
+  if (!vis) return;
+  const map = {
+    conversations: el.navItemConversations,
+    transcripts: el.navItemTranscripts,
+    daily: el.navItemDaily,
+    todos: el.navItemTodos,
+    facts: el.navItemFacts,
+    insights: el.navItemInsights,
+    journals: el.navItemJournals
+  };
+  const checkMap = {
+    conversations: el.settingShowConversations,
+    transcripts: el.settingShowTranscripts,
+    daily: el.settingShowDaily,
+    todos: el.settingShowTodos,
+    facts: el.settingShowFacts,
+    insights: el.settingShowInsights,
+    journals: el.settingShowJournals
+  };
+
+  for (const [key, navEl] of Object.entries(map)) {
+    const isVisible = vis[key] !== false;
+    if (navEl) navEl.style.display = isVisible ? '' : 'none';
+    if (checkMap[key]) checkMap[key].checked = isVisible;
+  }
+}
+
+async function handleVisibilityToggle() {
+  const vis = {
+    conversations: !!el.settingShowConversations?.checked,
+    transcripts: !!el.settingShowTranscripts?.checked,
+    daily: !!el.settingShowDaily?.checked,
+    todos: !!el.settingShowTodos?.checked,
+    facts: !!el.settingShowFacts?.checked,
+    insights: !!el.settingShowInsights?.checked,
+    journals: !!el.settingShowJournals?.checked
+  };
+  state.config.sidebarVisibility = vis;
+  applySidebarVisibility(vis);
+  await window.beeAPI.saveConfig({ sidebarVisibility: vis });
 }
 
 async function checkStatusIndicator() {
@@ -223,6 +303,7 @@ async function refreshLocalData() {
   const insightCount = (state.localData.insights || []).length;
 
   el.badgeConversations.textContent = convCount;
+  if (el.badgeTranscripts) el.badgeTranscripts.textContent = convCount;
   el.badgeDaily.textContent = dailyCount;
   el.badgeJournals.textContent = journalCount;
   el.badgeTodos.textContent = todoCount;
@@ -285,8 +366,18 @@ function switchView(viewName) {
 function renderActiveView() {
   const query = el.searchInput.value.toLowerCase().trim();
 
+  const isConvOrTranscript = state.activeView === 'conversations' || state.activeView === 'transcripts';
+  if (el.listControlsRow) el.listControlsRow.style.display = isConvOrTranscript ? 'flex' : 'none';
+  if (el.topicFilterBar) el.topicFilterBar.style.display = isConvOrTranscript ? 'flex' : 'none';
+
+  if (isConvOrTranscript) {
+    renderTopicFilterBar();
+  }
+
   if (state.activeView === 'conversations') {
     renderConversationsList(query);
+  } else if (state.activeView === 'transcripts') {
+    renderTranscriptsList(query);
   } else if (state.activeView === 'daily') {
     renderDailyList(query);
   } else if (state.activeView === 'journals') {
@@ -298,6 +389,160 @@ function renderActiveView() {
   } else if (state.activeView === 'insights') {
     renderInsightsList(query);
   }
+}
+
+function renderTopicFilterBar() {
+  if (!el.topicFilterBar) return;
+  const convs = state.localData.conversations || [];
+  const tagCounts = {};
+  for (const c of convs) {
+    for (const t of (c.tags || [])) {
+      tagCounts[t] = (tagCounts[t] || 0) + 1;
+    }
+  }
+
+  const sortedTags = Object.keys(tagCounts).sort((a, b) => tagCounts[b] - tagCounts[a]);
+
+  let html = `
+    <button class="topic-pill ${state.selectedTopic === 'All' ? 'active' : ''}" data-topic="All">
+      All <span class="topic-pill-count">${convs.length}</span>
+    </button>
+  `;
+
+  for (const tag of sortedTags) {
+    const isActive = state.selectedTopic === tag;
+    html += `
+      <button class="topic-pill ${isActive ? 'active' : ''}" data-topic="${escapeHtml(tag)}">
+        ${escapeHtml(tag)} <span class="topic-pill-count">${tagCounts[tag]}</span>
+      </button>
+    `;
+  }
+
+  el.topicFilterBar.innerHTML = html;
+
+  el.topicFilterBar.querySelectorAll('.topic-pill').forEach(pill => {
+    pill.addEventListener('click', () => {
+      state.selectedTopic = pill.dataset.topic;
+      renderTopicFilterBar();
+      renderActiveView();
+    });
+  });
+}
+
+function filterConversations(query) {
+  return (state.localData.conversations || []).filter(c => {
+    if (state.selectedTopic && state.selectedTopic !== 'All') {
+      if (!c.tags || !c.tags.includes(state.selectedTopic)) return false;
+    }
+    if (!query) return true;
+    return (c.title || '').toLowerCase().includes(query) ||
+           (c.summarySnippet || '').toLowerCase().includes(query) ||
+           (c.location || '').toLowerCase().includes(query) ||
+           (c.tags || []).some(t => t.toLowerCase().includes(query)) ||
+           (c.keywords || []).some(k => k.toLowerCase().includes(query));
+  });
+}
+
+function renderConversationsList(query = '') {
+  el.listTitle.textContent = state.selectedTopic !== 'All' ? `Conversations: ${state.selectedTopic}` : 'Conversations';
+  const items = filterConversations(query);
+  el.listCount.textContent = `${items.length} items`;
+  renderGroupedItems(items, 'conversations');
+}
+
+function renderTranscriptsList(query = '') {
+  el.listTitle.textContent = state.selectedTopic !== 'All' ? `Transcripts: ${state.selectedTopic}` : 'Verbatim Transcripts';
+  const items = filterConversations(query);
+  el.listCount.textContent = `${items.length} items`;
+  renderGroupedItems(items, 'transcripts');
+}
+
+function renderGroupedItems(items, viewType) {
+  el.itemsList.innerHTML = '';
+
+  if (items.length === 0) {
+    renderEmptyState(
+      state.selectedTopic !== 'All' ? `No items in "${state.selectedTopic}"` : 'No items found.',
+      'Try selecting "All" or clearing your search filter.'
+    );
+    return;
+  }
+
+  const groupBy = el.selectGroupBy ? el.selectGroupBy.value : 'none';
+
+  if (groupBy === 'none') {
+    items.forEach(c => el.itemsList.appendChild(createItemCard(c, viewType)));
+    return;
+  }
+
+  // Build groups
+  const groups = {};
+  for (const c of items) {
+    let groupKey = 'Other';
+    if (groupBy === 'topic') {
+      groupKey = (c.tags && c.tags.length > 0) ? c.tags[0] : 'General Conversations';
+    } else if (groupBy === 'month') {
+      if (c.created_at) {
+        let num = typeof c.created_at === 'number' ? c.created_at : (typeof c.created_at === 'string' && /^\d+$/.test(c.created_at) ? Number(c.created_at) : null);
+        const d = num ? new Date(num) : new Date(c.created_at);
+        if (!isNaN(d.getTime())) {
+          groupKey = d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+        }
+      }
+    } else if (groupBy === 'location') {
+      if (c.location) {
+        const parts = c.location.split(',');
+        groupKey = parts.length >= 2 ? `${parts[parts.length - 3] || parts[0]}, ${parts[parts.length - 2] || parts[1]}`.trim() : c.location;
+      } else {
+        groupKey = 'Undisclosed Location';
+      }
+    }
+
+    if (!groups[groupKey]) groups[groupKey] = [];
+    groups[groupKey].push(c);
+  }
+
+  // Render each group
+  for (const [groupName, groupItems] of Object.entries(groups)) {
+    const header = document.createElement('div');
+    header.className = 'group-header';
+    header.innerHTML = `
+      <span>${escapeHtml(groupName)}</span>
+      <span class="group-header-count">${groupItems.length} items</span>
+    `;
+    el.itemsList.appendChild(header);
+
+    for (const c of groupItems) {
+      el.itemsList.appendChild(createItemCard(c, viewType));
+    }
+  }
+}
+
+function createItemCard(c, viewType) {
+  const card = document.createElement('div');
+  const isSelected = state.selectedItem?.id === c.id;
+  card.className = `item-card ${isSelected ? 'active' : ''}`;
+  card.onclick = () => selectItem(viewType, c.id);
+
+  const dateStr = formatDate(c.created_at);
+  const duration = formatDuration(c.duration_ms);
+  const turns = c.utteranceCount ? `${c.utteranceCount} turns` : '';
+  const icon = viewType === 'transcripts' ? '🎙️' : '💬';
+  const tagsHtml = (c.tags || []).slice(0, 2).map(t => `<span class="badge-tag">🏷️ ${escapeHtml(t)}</span>`).join('');
+
+  card.innerHTML = `
+    <div class="card-top">
+      <span class="item-title">${icon} ${escapeHtml(c.title)}</span>
+      <span class="item-date">${escapeHtml(dateStr)}</span>
+    </div>
+    <div class="item-snippet">${escapeHtml(c.summarySnippet || (viewType === 'transcripts' ? 'Verbatim audio transcript' : 'No summary text available.'))}</div>
+    <div class="card-badges">
+      ${duration ? `<span class="badge-tag">⏱️ ${duration}</span>` : ''}
+      ${turns ? `<span class="badge-tag">${turns}</span>` : ''}
+      ${tagsHtml}
+    </div>
+  `;
+  return card;
 }
 
 function renderInsightsList(query = '') {
@@ -356,45 +601,6 @@ function showInsightsDetail() {
 
   el.markdownViewCode.textContent = JSON.stringify(insights, null, 2);
   el.jsonViewCode.textContent = JSON.stringify(insights, null, 2);
-}
-
-function renderConversationsList(query = '') {
-  el.listTitle.textContent = 'Conversations';
-  const items = (state.localData.conversations || []).filter(c => {
-    if (!query) return true;
-    return (c.title || '').toLowerCase().includes(query) ||
-           (c.summarySnippet || '').toLowerCase().includes(query);
-  });
-
-  el.listCount.textContent = `${items.length} items`;
-  el.itemsList.innerHTML = '';
-
-  if (items.length === 0) {
-    renderEmptyState('No conversations found.', 'Sync your Bee device or load sample data.');
-    return;
-  }
-
-  items.forEach(c => {
-    const card = document.createElement('div');
-    card.className = `item-card ${state.selectedItem?.id === c.id ? 'active' : ''}`;
-    card.onclick = () => selectItem('conversations', c.id);
-
-    const dateStr = formatDate(c.created_at);
-    const duration = formatDuration(c.duration_ms);
-
-    card.innerHTML = `
-      <div class="card-top">
-        <span class="item-title">${escapeHtml(c.title)}</span>
-        <span class="item-date">${escapeHtml(dateStr)}</span>
-      </div>
-      <div class="item-snippet">${escapeHtml(c.summarySnippet || 'No summary text available.')}</div>
-      <div class="card-badges">
-        ${duration ? `<span class="badge-tag">⏱️ ${duration}</span>` : ''}
-        ${c.utteranceCount ? `<span class="badge-tag">💬 ${c.utteranceCount} turns</span>` : ''}
-      </div>
-    `;
-    el.itemsList.appendChild(card);
-  });
 }
 
 function renderDailyList(query = '') {
@@ -573,11 +779,81 @@ async function selectItem(type, id) {
   const durMs = data.duration_ms || (data.end_time && data.start_time ? (data.end_time - data.start_time) : null);
   const duration = durMs ? formatDuration(durMs) : '';
 
-  el.detailTypeBadge.textContent = type.toUpperCase();
+  el.detailTypeBadge.textContent = type === 'transcripts' ? 'VERBATIM TRANSCRIPT' : type.toUpperCase();
   el.detailTimestamp.textContent = dateStr;
   el.detailDuration.textContent = duration ? `• ${duration}` : '';
   el.detailTitle.textContent = title;
   el.detailId.textContent = id;
+
+  // Standalone Transcript .txt Button
+  if (el.btnOpenTxt) {
+    if (fileData.txtPath && (type === 'conversations' || type === 'transcripts')) {
+      el.btnOpenTxt.style.display = 'inline-flex';
+    } else {
+      el.btnOpenTxt.style.display = 'none';
+    }
+  }
+
+  // Keywords and Topics Row
+  const metaConv = (state.localData.conversations || []).find(c => c.id === id);
+  if (el.detailKeywordsRow) {
+    if (metaConv && (metaConv.tags?.length > 0 || metaConv.keywords?.length > 0 || metaConv.location)) {
+      el.detailKeywordsRow.style.display = 'flex';
+      let badges = '';
+      for (const tag of (metaConv.tags || [])) {
+        badges += `<span class="keyword-tag" title="Filter by ${escapeHtml(tag)}" onclick="window.filterByTopic('${escapeHtml(tag)}')">🏷️ ${escapeHtml(tag)}</span>`;
+      }
+      for (const kw of (metaConv.keywords || []).slice(0, 5)) {
+        badges += `<span class="keyword-tag" title="Search for ${escapeHtml(kw)}" onclick="window.searchKeyword('${escapeHtml(kw)}')">#${escapeHtml(kw)}</span>`;
+      }
+      if (metaConv.location) {
+        badges += `<span class="keyword-tag location-tag" title="${escapeHtml(metaConv.location)}">📍 ${escapeHtml(metaConv.location.split(',')[0])}</span>`;
+      }
+      el.detailKeywordsRow.innerHTML = badges;
+    } else {
+      el.detailKeywordsRow.style.display = 'none';
+    }
+  }
+
+  // Related Conversations Card
+  if (el.cardRelatedConvs) {
+    if (metaConv && (metaConv.tags?.length > 0 || metaConv.keywords?.length > 0)) {
+      const currentTags = new Set(metaConv.tags || []);
+      const currentKws = new Set((metaConv.keywords || []).map(k => k.toLowerCase()));
+
+      const related = (state.localData.conversations || []).filter(other => {
+        if (other.id === id) return false;
+        const sharesTag = (other.tags || []).some(t => currentTags.has(t));
+        const sharesKw = (other.keywords || []).some(k => currentKws.has(k.toLowerCase()));
+        return sharesTag || sharesKw;
+      }).slice(0, 6);
+
+      if (related.length > 0) {
+        el.cardRelatedConvs.style.display = 'flex';
+        el.detailRelatedConvsList.innerHTML = related.map(rel => {
+          const sharedTags = (rel.tags || []).filter(t => currentTags.has(t));
+          const tagsPills = sharedTags.map(st => `<span class="related-tag-pill">${escapeHtml(st)}</span>`).join('');
+          const dStr = formatDate(rel.created_at);
+          const dur = rel.duration_ms ? formatDuration(rel.duration_ms) : '';
+
+          return `
+            <div class="related-conv-item" onclick="selectItem('conversations', '${rel.id}')">
+              <div class="related-conv-title">${escapeHtml(rel.title)}</div>
+              <div class="related-conv-meta">
+                <span>${escapeHtml(dStr)}</span>
+                <span>${dur || (rel.utteranceCount ? `${rel.utteranceCount} turns` : '')}</span>
+              </div>
+              ${tagsPills ? `<div class="related-conv-tags">${tagsPills}</div>` : ''}
+            </div>
+          `;
+        }).join('');
+      } else {
+        el.cardRelatedConvs.style.display = 'none';
+      }
+    } else {
+      el.cardRelatedConvs.style.display = 'none';
+    }
+  }
 
   // Executive Summary Card
   const summary = data.summary || data.short_summary || data.executive_summary || data.overview || (data.conversation_summary ? data.conversation_summary.text : '');
@@ -663,6 +939,21 @@ async function selectItem(type, id) {
   el.markdownViewCode.textContent = fileData.markdownData || 'No markdown generated.';
   el.jsonViewCode.textContent = JSON.stringify(data, null, 2);
 }
+
+window.filterByTopic = function(topic) {
+  state.selectedTopic = topic;
+  if (state.activeView !== 'conversations' && state.activeView !== 'transcripts') {
+    switchView('conversations');
+  } else {
+    renderTopicFilterBar();
+    renderActiveView();
+  }
+};
+
+window.searchKeyword = function(kw) {
+  el.searchInput.value = kw;
+  renderActiveView();
+};
 
 function showTodoDetail() {
   el.detailPlaceholder.style.display = 'none';
@@ -918,6 +1209,30 @@ function setupEventListeners() {
   if (el.btnSyncAll) el.btnSyncAll.addEventListener('click', () => startSyncProcess('all'));
   if (el.btnQuickSync) el.btnQuickSync.addEventListener('click', () => startSyncProcess('recent'));
 
+  // Group by select
+  if (el.selectGroupBy) {
+    el.selectGroupBy.addEventListener('change', () => {
+      state.groupBy = el.selectGroupBy.value;
+      renderActiveView();
+    });
+  }
+
+  // Sidebar visibility toggles
+  const visCheckboxes = [
+    el.settingShowConversations,
+    el.settingShowTranscripts,
+    el.settingShowDaily,
+    el.settingShowTodos,
+    el.settingShowFacts,
+    el.settingShowInsights,
+    el.settingShowJournals
+  ];
+  visCheckboxes.forEach(cb => {
+    if (cb) {
+      cb.addEventListener('change', handleVisibilityToggle);
+    }
+  });
+
   // Search inputs
   el.searchInput.addEventListener('input', () => renderActiveView());
   el.bigSearchInput.addEventListener('input', (e) => executeGlobalSearch(e.target.value));
@@ -941,6 +1256,14 @@ function setupEventListeners() {
   });
 
   // Detail actions
+  if (el.btnOpenTxt) {
+    el.btnOpenTxt.addEventListener('click', async () => {
+      if (state.currentItemDetail?.txtPath) {
+        await window.beeAPI.openFileInSystem(state.currentItemDetail.txtPath);
+      }
+    });
+  }
+
   el.btnOpenMd.addEventListener('click', async () => {
     if (state.currentItemDetail?.mdPath) {
       await window.beeAPI.openFileInSystem(state.currentItemDetail.mdPath);
