@@ -12,13 +12,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         // Run purely as an accessory menu bar application
         NSApp.setActivationPolicy(.accessory)
 
-        // Request notification permissions for sync and Gemini summaries
+        // Request notification permissions
         UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
-        // Setup NSStatusItem
+        // Setup NSStatusItem with colorized Bee icon
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.image = BeeIcon.createTemplateIcon()
+            button.image = BeeIcon.createIcon()
             button.imagePosition = .imageOnly
             button.toolTip = "Bee Menu Bar"
         }
@@ -39,38 +39,30 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let store = BeeStore.shared
         store.loadLocalData()
 
-        // 1. Status Header
-        let statusTitle: String
-        if store.isSyncing {
-            statusTitle = "🐝 Bee: Syncing... (\(store.syncMessage))"
-        } else if store.isConnected {
-            let epName = store.config.endpoint.contains("8787") ? "Local Proxy" : "Cloud API"
-            statusTitle = "🐝 Bee: Connected (\(epName)) • Last synced \(store.lastSyncTimeText)"
-        } else {
-            statusTitle = "🐝 Bee: Offline / Setup • Last synced \(store.lastSyncTimeText)"
-        }
-        let headerItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+        // 1. Top Header Line (Styled like Maccy: "Select the clip you want to add to your clipboard")
+        let headerTitle = "Select a Bee conversation to copy or view"
+        let headerItem = NSMenuItem(title: headerTitle, action: nil, keyEquivalent: "")
         headerItem.isEnabled = false
         menu.addItem(headerItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // 2. Recent Conversations Section
-        let conversations = Array(store.conversations.prefix(20))
+        // 2. Conversation Items
+        let conversations = Array(store.conversations.prefix(25))
         if conversations.isEmpty {
-            let emptyItem = NSMenuItem(title: "No conversations downloaded yet", action: nil, keyEquivalent: "")
+            let emptyItem = NSMenuItem(title: "No Bee records found in \(store.config.storageDir)", action: nil, keyEquivalent: "")
             emptyItem.isEnabled = false
             menu.addItem(emptyItem)
         } else {
-            for conv in conversations {
-                let menuItem = createConversationMenuItem(conv)
+            for (index, conv) in conversations.enumerated() {
+                let menuItem = createConversationMenuItem(conv, index: index)
                 menu.addItem(menuItem)
             }
         }
 
         menu.addItem(NSMenuItem.separator())
 
-        // 3. Settings & Management Section (Bottom)
+        // 3. Settings & Controls at the Bottom
 
         // A. Folder Link & Submenu
         let folderDisplay = store.config.storageDir.replacingOccurrences(
@@ -92,11 +84,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         folderItem.submenu = folderSubmenu
         menu.addItem(folderItem)
 
-        // B. Bee Sync Info & Submenu
+        // B. Bee Sync Status & Submenu
         let syncStatusText = store.isConnected
-            ? (store.config.endpoint.contains("8787") ? "Proxy (127.0.0.1:8787)" : "Public Cloud API")
+            ? (store.config.endpoint.contains("8787") ? "Connected (Proxy 127.0.0.1:8787)" : "Connected (Cloud API)")
             : "Offline / Needs Setup"
-        let syncItem = NSMenuItem(title: "🐝 Bee: \(syncStatusText)", action: nil, keyEquivalent: "")
+        let syncItem = NSMenuItem(title: "🐝 Bee Sync: \(syncStatusText)", action: nil, keyEquivalent: "")
 
         let syncSubmenu = NSMenu()
         let proxyAction = NSMenuItem(title: "Switch to Local Proxy (127.0.0.1:8787)", action: #selector(switchToProxy), keyEquivalent: "")
@@ -172,23 +164,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     // MARK: - Conversation Item & Submenu Generator
-    private func createConversationMenuItem(_ conv: BeeConversationItem) -> NSMenuItem {
+    private func createConversationMenuItem(_ conv: BeeConversationItem, index: Int) -> NSMenuItem {
         let cleanSummary = getCleanSummary(conv: conv)
         let firstLine = extractFirstLine(cleanSummary)
 
-        // Line format: "🎙️ Title — First line of summary"
-        let displayTitle = firstLine.isEmpty
-            ? "🎙️ \(conv.title)"
-            : "🎙️ \(conv.title) — \(firstLine)"
+        // Displays the first line of the summary on the line (like Maccy)
+        let rawLine = firstLine.isEmpty ? conv.title : firstLine
+        let lineTitle = formatSummaryLine(rawLine, maxLength: 52)
 
-        let truncatedTitle = displayTitle.count > 90
-            ? String(displayTitle.prefix(87)) + "..."
-            : displayTitle
+        // Setup shortcut key ⌘0..⌘9 for top 10 items
+        let keyEq = index < 10 ? "\(index)" : ""
 
-        let item = NSMenuItem(title: truncatedTitle, action: nil, keyEquivalent: "")
+        // Selecting directly copies the summary to clipboard
+        let item = NSMenuItem(title: lineTitle, action: #selector(copySummary(_:)), keyEquivalent: keyEq)
+        item.target = self
         item.representedObject = conv
 
-        // Tooltip shows full multi-line executive summary on hover
+        // Tooltip: Displays full summary when hovered
         let dateStr = conv.relativeDateString
         let durStr = conv.formattedDuration ?? ""
         let turnsStr = (conv.utteranceCount != nil) ? "\(conv.utteranceCount!) turns" : ""
@@ -201,7 +193,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         \(cleanSummary)
         """
 
-        // Submenu: Copy Summary, Copy Transcript, Summarize with Gemini Flash Lite
+        // Submenu: Copy Transcript, Copy Summary, Summarize with Gemini Flash Lite
         let submenu = NSMenu()
 
         let copySummaryItem = NSMenuItem(title: "📋 Copy Summary", action: #selector(copySummary(_:)), keyEquivalent: "")
@@ -285,7 +277,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard !apiKey.isEmpty else { return }
         }
 
-        // Read transcript or summary to summarize
         let txtPath = conv.transcriptTextPath(storageDir: store.config.storageDir)
         var sourceText = ""
         if FileManager.default.fileExists(atPath: txtPath),
@@ -305,7 +296,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(flashSummary, forType: .string)
 
-                    // Also save locally
                     let outPath = (store.config.storageDir as NSString).appendingPathComponent("conversations/\(conv.id)_gemini_flash.md")
                     try? flashSummary.write(toFile: outPath, atomically: true, encoding: .utf8)
 
@@ -471,7 +461,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 s = content
             }
         }
-        // Remove markdown hashes
         return s.replacingOccurrences(of: "## Summary", with: "")
                 .replacingOccurrences(of: "##", with: "")
                 .replacingOccurrences(of: "#", with: "")
@@ -486,6 +475,14 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         return ""
+    }
+
+    private func formatSummaryLine(_ line: String, maxLength: Int) -> String {
+        let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count > maxLength {
+            return String(trimmed.prefix(maxLength - 3)) + "..."
+        }
+        return trimmed
     }
 
     private func promptForGeminiKey() -> String {

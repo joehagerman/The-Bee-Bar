@@ -1,31 +1,51 @@
 import AppKit
 
 public enum BeeIcon {
-    private static let base64Icon = "iVBORw0KGgoAAAANSUhEUgAAACQAAAAkCAYAAADhAJiYAAAAAXNSR0IArs4c6QAAADhlWElmTU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAAqACAAQAAAABAAAAJKADAAQAAAABAAAAJAAAAAAJxsHGAAAEAElEQVRYCe3WyW9NURzA8Ral5nlITEVVizYioUEiKoqEBQnRlSESC3asEP+AxEIkIgixETsbiRBzYmpDRMw1tcbWGKQ11/fLuy/3PU/67qshkv6ST94dzj3nd3/nnNtmZbXGf1aBthnk24Zn1NTMs5n0nRX1oXYk0R9D8BafkSo6crEAtm/EV6QVURPqQq/lWIH3qEU4qWzOO2EWVsI29/EBaYUdRI1cHsjHTJjQEbyDYcIzYAUP4w6sUNqRSUJB5304WIIGXI9dLOLXCu3B89i1SD/OcSbRnocGYQqmIQfGJ5zAUbzBR0SKqGvIzn3GSmxAGZyWSlTDnTceJnsNVqm53UiTloVTZTKum10ohbtKHu+G92xj2z8exYxwGlbGKUsOr3nPNraNFFHXkB/EHsiDO6wGfdEVht8mr9VjKGzrM2l/h6ImZPvOcBE7RW59B86HcRsm5D0Xvm19Ju3FnU5CLmLftDcGYzocsAhbYsfZ/BouYL87QRK2dec9wAu8xhf8MoKOUjXwe1IC14Q7pwAmZIdOl4ZhLB7BGIgruAc/jvKFTOgWLsK1dRl+v36KVBUySatRgbkwKZO4Cbe3H8Fq+ObrY79eM/rBdbQNTtlIWMlRmIoylOMA9sGqWdV4pErI6ZiHNcjBQVThKlwjfls6YD4KcQm+tdEdXvM7tB/H4NbPxxhMgH/nTNC/c3uRslJc/x5WZwTO4RnWYjhMLAhfohQOdgFL4NTJY6fFe7YJv7B92Nc62LdjOJZjxqNN/OjHgfPt2xXjLnbGfp2eIAZwsAgT8RROjdMqj5/Ae7axbRD2YZ87Yr+O4ViOGY/khMzWxeybuRZeIRzdOJmJBajDIdjGt5fHXvOebcrhM+GwzTs4hssjoUKcJ4QJFsFd8hB2GoQdL4X3XOSn4boYksRr3rONFVmKcFL2ad/ec6yEoiSUi5tNsLRWycVXgj5woS7EcrhWjA/wg+cCNQmNhlMxGb3g98vPwkDkYQ5WYTC24jBc3PFIVS4zzsNqVOArfMjyNuIW/C5dwwqYWDg6cLIdJncRBQiezeXY/vdhE2pg//FwHpPDBjbciONwgXZFHdzidr4ZVnEYTDIbhhX2fmdYaTeF98ehP1yXlaiC05aQDOcJ29LzIJz/WtTD9ZADq+RiLIXhoE5FgyehMFEZ7sLzOAMr9xmvkTBNnMcjVYXiNznwQTsNh2/5GL1hwmcRjkmcWCXbvIEVUlqRvKjTeci3dArLMAAmfQdO22wsQz524SiSK8il3xsO7FRtwDO8hFWSx17znm1s+1fCndITi3ESwbScil3znm0iR0vfIJcRC+F/BcYB3IDTmFG0NCEHdR0Gu8r18sWLrdFagX9VgW8vfuIn7U+HHwAAAABJRU5ErkJggg=="
-
-    public static func createTemplateIcon() -> NSImage {
-        // 1. Try loading from bundle resources
-        if let bundleURL = Bundle.main.url(forResource: "BeeTemplate@2x", withExtension: "png") ?? Bundle.main.url(forResource: "BeeTemplate", withExtension: "png"),
-           let img = NSImage(contentsOf: bundleURL) {
+    public static func createIcon() -> NSImage {
+        // 1. Try bundle resources for color icon
+        let bundle = Bundle.main
+        if let url = bundle.url(forResource: "BeeColor@2x", withExtension: "png") ?? bundle.url(forResource: "BeeColor", withExtension: "png"),
+           let img = NSImage(contentsOf: url) {
             img.size = NSSize(width: 18, height: 18)
-            img.isTemplate = true
+            img.isTemplate = false // Colorized icon
             return img
         }
 
-        // 2. Try loading from self-contained embedded base64 data
-        if let data = Data(base64Encoded: base64Icon),
-           let img = NSImage(data: data) {
+        // 2. Direct path relative to project
+        let directPath = "/Users/joehagerman/Desktop/Bee Desktop/BeeBar/Resources/BeeColor@2x.png"
+        if FileManager.default.fileExists(atPath: directPath),
+           let img = NSImage(contentsOfFile: directPath) {
             img.size = NSSize(width: 18, height: 18)
-            img.isTemplate = true
+            img.isTemplate = false
             return img
         }
 
-        // 3. Fallback system symbol
-        if let symbol = NSImage(systemSymbolName: "ant.fill", accessibilityDescription: "Bee") {
-            symbol.isTemplate = true
-            return symbol
-        }
+        // 3. Fallback programmatic rendering
+        let size = NSSize(width: 18, height: 18)
+        let fallback = NSImage(size: size, flipped: false) { rect in
+            guard let ctx = NSGraphicsContext.current?.cgContext else { return false }
+            let amber = NSColor(red: 245/255, green: 175/255, blue: 25/255, alpha: 1.0).cgColor
+            let dark = NSColor(red: 25/255, green: 25/255, blue: 28/255, alpha: 1.0).cgColor
 
-        return NSImage(size: NSSize(width: 18, height: 18))
+            // Body
+            ctx.setFillColor(amber)
+            ctx.fillEllipse(in: CGRect(x: 5.5, y: 2.0, width: 7.0, height: 10.0))
+
+            // Stripes
+            ctx.setStrokeColor(dark)
+            ctx.setLineWidth(1.2)
+            ctx.strokeLineSegments(between: [
+                CGPoint(x: 5.5, y: 5.0), CGPoint(x: 12.5, y: 5.0),
+                CGPoint(x: 5.5, y: 7.5), CGPoint(x: 12.5, y: 7.5)
+            ])
+
+            // Head
+            ctx.setFillColor(dark)
+            ctx.fillEllipse(in: CGRect(x: 6.5, y: 12.0, width: 5.0, height: 3.5))
+
+            return true
+        }
+        fallback.isTemplate = false
+        return fallback
     }
 }
