@@ -8,6 +8,7 @@ struct SettingsView: View {
     @State private var token: String = ""
     @State private var storageDir: String = ""
     @State private var syncInterval: Int = 5
+    @State private var geminiApiKey: String = ""
     @State private var isShowingToken: Bool = false
     @State private var testResultText: String? = nil
     @State private var isTesting: Bool = false
@@ -111,6 +112,18 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Gemini API Key
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Google Gemini API Key (Flash Lite)")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                        SecureField("AIzaSy... (for 1-click Flash Lite summarization)", text: $geminiApiKey)
+                            .textFieldStyle(.roundedBorder)
+                        Text("Used when selecting 'Summarize with Gemini Flash Lite' on any conversation.")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                    }
+
                     // Sync Interval
                     VStack(alignment: .leading, spacing: 4) {
                         Text("Background Sync Frequency")
@@ -121,8 +134,9 @@ struct SettingsView: View {
                             Text("Every 1 minute").tag(1)
                             Text("Every 5 minutes (Recommended)").tag(5)
                             Text("Every 15 minutes").tag(15)
-                            Text("Every 30 minutes").tag(30)
-                            Text("Every 1 hour").tag(60)
+                            Text("Daily (Every 24 hours)").tag(1440)
+                            Text("Weekly").tag(10080)
+                            Text("Manual Only").tag(0)
                         }
                         .labelsHidden()
                         .pickerStyle(.menu)
@@ -185,6 +199,7 @@ struct SettingsView: View {
             self.token = store.config.token
             self.storageDir = store.config.storageDir
             self.syncInterval = store.config.syncIntervalMinutes
+            self.geminiApiKey = store.config.geminiApiKey
         }
     }
 
@@ -227,6 +242,7 @@ struct SettingsView: View {
         updated.token = token.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.storageDir = storageDir.trimmingCharacters(in: .whitespacesAndNewlines)
         updated.syncIntervalMinutes = syncInterval
+        updated.geminiApiKey = geminiApiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         store.updateConfig(updated)
         store.showingSettings = false
     }

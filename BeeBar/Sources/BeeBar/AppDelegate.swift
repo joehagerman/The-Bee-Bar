@@ -1,117 +1,520 @@
 import AppKit
 import SwiftUI
+import UserNotifications
 
 @MainActor
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
-    var popover: NSPopover!
-    var eventMonitor: Any?
+    var mainMenu: NSMenu!
+    var preferencesWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // Ensure app runs as menu bar accessory (no dock icon)
+        // Run purely as an accessory menu bar application
         NSApp.setActivationPolicy(.accessory)
 
-        // Create NSPopover
-        popover = NSPopover()
-        popover.contentSize = NSSize(width: 380, height: 530)
-        popover.behavior = .transient
-        popover.animates = true
-        popover.contentViewController = NSHostingController(rootView: MenuView(store: BeeStore.shared))
+        // Request notification permissions for sync and Gemini summaries
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, _ in }
 
-        // Create NSStatusItem in the system menu bar
+        // Setup NSStatusItem
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = statusItem.button {
-            button.title = "🐝"
-            button.action = #selector(statusItemClicked(_:))
-            button.target = self
-            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            button.image = BeeIcon.createTemplateIcon()
+            button.imagePosition = .imageOnly
+            button.toolTip = "Bee Menu Bar"
         }
 
-        // Monitor clicks outside popover
-        eventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            if let self = self, self.popover.isShown {
-                self.closePopover(sender: nil)
+        // Setup native macOS NSMenu
+        mainMenu = NSMenu()
+        mainMenu.delegate = self
+        statusItem.menu = mainMenu
+
+        // Initial load of local records
+        BeeStore.shared.loadLocalData()
+    }
+
+    // MARK: - NSMenuDelegate (Builds Dynamic Native Menu on Click)
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+
+        let store = BeeStore.shared
+        store.loadLocalData()
+
+        // 1. Status Header
+        let statusTitle: String
+        if store.isSyncing {
+            statusTitle = "🐝 Bee: Syncing... (\(store.syncMessage))"
+        } else if store.isConnected {
+            let epName = store.config.endpoint.contains("8787") ? "Local Proxy" : "Cloud API"
+            statusTitle = "🐝 Bee: Connected (\(epName)) • Last synced \(store.lastSyncTimeText)"
+        } else {
+            statusTitle = "🐝 Bee: Offline / Setup • Last synced \(store.lastSyncTimeText)"
+        }
+        let headerItem = NSMenuItem(title: statusTitle, action: nil, keyEquivalent: "")
+        headerItem.isEnabled = false
+        menu.addItem(headerItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // 2. Recent Conversations Section
+        let conversations = Array(store.conversations.prefix(20))
+        if conversations.isEmpty {
+            let emptyItem = NSMenuItem(title: "No conversations downloaded yet", action: nil, keyEquivalent: "")
+            emptyItem.isEnabled = false
+            menu.addItem(emptyItem)
+        } else {
+            for conv in conversations {
+                let menuItem = createConversationMenuItem(conv)
+                menu.addItem(menuItem)
+            }
+        }
+
+        menu.addItem(NSMenuItem.separator())
+
+        // 3. Settings & Management Section (Bottom)
+
+        // A. Folder Link & Submenu
+        let folderDisplay = store.config.storageDir.replacingOccurrences(
+            of: FileManager.default.homeDirectoryForCurrentUser.path,
+            with: "~"
+        )
+        let folderItem = NSMenuItem(title: "📂 Folder: \(folderDisplay)", action: #selector(openFolderInFinder), keyEquivalent: "")
+        folderItem.target = self
+
+        let folderSubmenu = NSMenu()
+        let openFolderAction = NSMenuItem(title: "Open in Finder", action: #selector(openFolderInFinder), keyEquivalent: "")
+        openFolderAction.target = self
+        folderSubmenu.addItem(openFolderAction)
+
+        let changeFolderAction = NSMenuItem(title: "Change Folder...", action: #selector(changeStorageFolder), keyEquivalent: "")
+        changeFolderAction.target = self
+        folderSubmenu.addItem(changeFolderAction)
+
+        folderItem.submenu = folderSubmenu
+        menu.addItem(folderItem)
+
+        // B. Bee Sync Info & Submenu
+        let syncStatusText = store.isConnected
+            ? (store.config.endpoint.contains("8787") ? "Proxy (127.0.0.1:8787)" : "Public Cloud API")
+            : "Offline / Needs Setup"
+        let syncItem = NSMenuItem(title: "🐝 Bee: \(syncStatusText)", action: nil, keyEquivalent: "")
+
+        let syncSubmenu = NSMenu()
+        let proxyAction = NSMenuItem(title: "Switch to Local Proxy (127.0.0.1:8787)", action: #selector(switchToProxy), keyEquivalent: "")
+        proxyAction.target = self
+        if store.config.endpoint.contains("8787") { proxyAction.state = .on }
+        syncSubmenu.addItem(proxyAction)
+
+        let cloudAction = NSMenuItem(title: "Switch to Public API", action: #selector(switchToPublicApi), keyEquivalent: "")
+        cloudAction.target = self
+        if store.config.endpoint.contains("developer.bee.amazon.dev") { cloudAction.state = .on }
+        syncSubmenu.addItem(cloudAction)
+
+        syncSubmenu.addItem(NSMenuItem.separator())
+
+        let tokenAction = NSMenuItem(title: "Set Bearer Token...", action: #selector(promptForToken), keyEquivalent: "")
+        tokenAction.target = self
+        syncSubmenu.addItem(tokenAction)
+
+        let testAction = NSMenuItem(title: "Verify Connection (GET /v1/me)", action: #selector(testConnection), keyEquivalent: "")
+        testAction.target = self
+        syncSubmenu.addItem(testAction)
+
+        syncItem.submenu = syncSubmenu
+        menu.addItem(syncItem)
+
+        // C. Update Frequency Submenu
+        let freqText = formatFrequency(store.config.syncIntervalMinutes)
+        let freqItem = NSMenuItem(title: "⏱️ Update Frequency: \(freqText)", action: nil, keyEquivalent: "")
+
+        let freqSubmenu = NSMenu()
+        let freqs: [(String, Int)] = [
+            ("Every 1 minute", 1),
+            ("Every 5 minutes (Recommended)", 5),
+            ("Every 15 minutes", 15),
+            ("Daily (Every 24 hours)", 1440),
+            ("Weekly", 10080),
+            ("Manual Only", 0)
+        ]
+        for (label, val) in freqs {
+            let item = NSMenuItem(title: label, action: #selector(setFrequency(_:)), keyEquivalent: "")
+            item.target = self
+            item.tag = val
+            if store.config.syncIntervalMinutes == val {
+                item.state = .on
+            }
+            freqSubmenu.addItem(item)
+        }
+        freqItem.submenu = freqSubmenu
+        menu.addItem(freqItem)
+
+        // D. Update Now & Update All
+        let updateNowTitle = store.isSyncing ? "🔄 Updating Records..." : "🔄 Update Now (Sync Recent Records)"
+        let updateNowItem = NSMenuItem(title: updateNowTitle, action: #selector(updateNow), keyEquivalent: "r")
+        updateNowItem.target = self
+        updateNowItem.isEnabled = !store.isSyncing
+        menu.addItem(updateNowItem)
+
+        let updateAllItem = NSMenuItem(title: "⚡ Update All (Full Archive Sync)", action: #selector(updateAll), keyEquivalent: "")
+        updateAllItem.target = self
+        updateAllItem.isEnabled = !store.isSyncing
+        menu.addItem(updateAllItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // E. Preferences & Quit
+        let prefsItem = NSMenuItem(title: "Preferences...", action: #selector(openPreferences), keyEquivalent: ",")
+        prefsItem.target = self
+        menu.addItem(prefsItem)
+
+        let quitItem = NSMenuItem(title: "Quit BeeBar", action: #selector(quitApp), keyEquivalent: "q")
+        quitItem.target = self
+        menu.addItem(quitItem)
+    }
+
+    // MARK: - Conversation Item & Submenu Generator
+    private func createConversationMenuItem(_ conv: BeeConversationItem) -> NSMenuItem {
+        let cleanSummary = getCleanSummary(conv: conv)
+        let firstLine = extractFirstLine(cleanSummary)
+
+        // Line format: "🎙️ Title — First line of summary"
+        let displayTitle = firstLine.isEmpty
+            ? "🎙️ \(conv.title)"
+            : "🎙️ \(conv.title) — \(firstLine)"
+
+        let truncatedTitle = displayTitle.count > 90
+            ? String(displayTitle.prefix(87)) + "..."
+            : displayTitle
+
+        let item = NSMenuItem(title: truncatedTitle, action: nil, keyEquivalent: "")
+        item.representedObject = conv
+
+        // Tooltip shows full multi-line executive summary on hover
+        let dateStr = conv.relativeDateString
+        let durStr = conv.formattedDuration ?? ""
+        let turnsStr = (conv.utteranceCount != nil) ? "\(conv.utteranceCount!) turns" : ""
+        let metaLine = [dateStr, durStr, turnsStr].filter { !$0.isEmpty }.joined(separator: " • ")
+
+        item.toolTip = """
+        \(conv.title)
+        [\(metaLine)]
+
+        \(cleanSummary)
+        """
+
+        // Submenu: Copy Summary, Copy Transcript, Summarize with Gemini Flash Lite
+        let submenu = NSMenu()
+
+        let copySummaryItem = NSMenuItem(title: "📋 Copy Summary", action: #selector(copySummary(_:)), keyEquivalent: "")
+        copySummaryItem.target = self
+        copySummaryItem.representedObject = conv
+        submenu.addItem(copySummaryItem)
+
+        let copyTranscriptItem = NSMenuItem(title: "🎙️ Copy Transcript", action: #selector(copyTranscript(_:)), keyEquivalent: "")
+        copyTranscriptItem.target = self
+        copyTranscriptItem.representedObject = conv
+        submenu.addItem(copyTranscriptItem)
+
+        let geminiItem = NSMenuItem(title: "⚡ Summarize with Gemini Flash Lite", action: #selector(summarizeWithGemini(_:)), keyEquivalent: "")
+        geminiItem.target = self
+        geminiItem.representedObject = conv
+        submenu.addItem(geminiItem)
+
+        submenu.addItem(NSMenuItem.separator())
+
+        let openMdItem = NSMenuItem(title: "📄 Open Markdown Summary (.md)", action: #selector(openMarkdown(_:)), keyEquivalent: "")
+        openMdItem.target = self
+        openMdItem.representedObject = conv
+        submenu.addItem(openMdItem)
+
+        let openTxtItem = NSMenuItem(title: "📝 Open Transcript (.txt)", action: #selector(openTranscript(_:)), keyEquivalent: "")
+        openTxtItem.target = self
+        openTxtItem.representedObject = conv
+        submenu.addItem(openTxtItem)
+
+        let revealItem = NSMenuItem(title: "🔍 Reveal in Finder", action: #selector(revealInFinder(_:)), keyEquivalent: "")
+        revealItem.target = self
+        revealItem.representedObject = conv
+        submenu.addItem(revealItem)
+
+        item.submenu = submenu
+        return item
+    }
+
+    // MARK: - Actions for Conversations
+    @objc func copySummary(_ sender: NSMenuItem) {
+        guard let conv = sender.representedObject as? BeeConversationItem else { return }
+        let store = BeeStore.shared
+        let mdPath = conv.markdownPath(storageDir: store.config.storageDir)
+
+        var summaryText = ""
+        if FileManager.default.fileExists(atPath: mdPath),
+           let content = try? String(contentsOfFile: mdPath, encoding: .utf8) {
+            summaryText = content
+        } else {
+            summaryText = conv.summarySnippet ?? conv.title
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(summaryText, forType: .string)
+        showNotification(title: "Summary Copied", body: "\(conv.title) summary copied to clipboard.")
+    }
+
+    @objc func copyTranscript(_ sender: NSMenuItem) {
+        guard let conv = sender.representedObject as? BeeConversationItem else { return }
+        let store = BeeStore.shared
+        let txtPath = conv.transcriptTextPath(storageDir: store.config.storageDir)
+
+        guard FileManager.default.fileExists(atPath: txtPath),
+              let content = try? String(contentsOfFile: txtPath, encoding: .utf8) else {
+            showNotification(title: "Transcript Missing", body: "Verbatim transcript file not found.")
+            return
+        }
+
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(content, forType: .string)
+        showNotification(title: "Transcript Copied", body: "\(conv.title) transcript copied to clipboard.")
+    }
+
+    @objc func summarizeWithGemini(_ sender: NSMenuItem) {
+        guard let conv = sender.representedObject as? BeeConversationItem else { return }
+        let store = BeeStore.shared
+
+        var apiKey = store.config.geminiApiKey
+        if apiKey.isEmpty {
+            apiKey = promptForGeminiKey()
+            guard !apiKey.isEmpty else { return }
+        }
+
+        // Read transcript or summary to summarize
+        let txtPath = conv.transcriptTextPath(storageDir: store.config.storageDir)
+        var sourceText = ""
+        if FileManager.default.fileExists(atPath: txtPath),
+           let content = try? String(contentsOfFile: txtPath, encoding: .utf8), !content.isEmpty {
+            sourceText = content
+        } else {
+            sourceText = conv.summarySnippet ?? conv.title
+        }
+
+        showNotification(title: "Gemini Flash Lite", body: "Generating executive brief for \"\(conv.title)\"...")
+
+        Task {
+            do {
+                let flashSummary = try await GeminiService.shared.summarize(text: sourceText, apiKey: apiKey)
+
+                await MainActor.run {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(flashSummary, forType: .string)
+
+                    // Also save locally
+                    let outPath = (store.config.storageDir as NSString).appendingPathComponent("conversations/\(conv.id)_gemini_flash.md")
+                    try? flashSummary.write(toFile: outPath, atomically: true, encoding: .utf8)
+
+                    self.showNotification(
+                        title: "⚡ Gemini Flash Lite Brief Ready",
+                        body: "Copied to clipboard and saved to exports folder."
+                    )
+                }
+            } catch {
+                await MainActor.run {
+                    let alert = NSAlert()
+                    alert.messageText = "Gemini Summarization Failed"
+                    alert.informativeText = error.localizedDescription
+                    alert.runModal()
+                }
             }
         }
     }
 
-    @objc func statusItemClicked(_ sender: NSStatusBarButton) {
-        guard let currentEvent = NSApp.currentEvent else { return }
-
-        // Right-click or Control-click opens context menu
-        if currentEvent.type == .rightMouseUp || currentEvent.modifierFlags.contains(.control) {
-            showContextMenu()
-            return
-        }
-
-        togglePopover(sender: sender)
+    @objc func openMarkdown(_ sender: NSMenuItem) {
+        guard let conv = sender.representedObject as? BeeConversationItem else { return }
+        let store = BeeStore.shared
+        store.openFile(atPath: conv.markdownPath(storageDir: store.config.storageDir))
     }
 
-    func togglePopover(sender: AnyObject?) {
-        if popover.isShown {
-            closePopover(sender: sender)
-        } else {
-            showPopover(sender: sender)
-        }
+    @objc func openTranscript(_ sender: NSMenuItem) {
+        guard let conv = sender.representedObject as? BeeConversationItem else { return }
+        let store = BeeStore.shared
+        store.openFile(atPath: conv.transcriptTextPath(storageDir: store.config.storageDir))
     }
 
-    func showPopover(sender: AnyObject?) {
-        if let button = statusItem.button {
-            // Refresh local data when opening
-            BeeStore.shared.loadLocalData()
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-            NSApp.activate(ignoringOtherApps: true)
-        }
+    @objc func revealInFinder(_ sender: NSMenuItem) {
+        guard let conv = sender.representedObject as? BeeConversationItem else { return }
+        let store = BeeStore.shared
+        store.revealInFinder(atPath: conv.transcriptTextPath(storageDir: store.config.storageDir))
     }
 
-    func closePopover(sender: AnyObject?) {
-        popover.performClose(sender)
-    }
-
-    func showContextMenu() {
-        let menu = NSMenu()
-
-        let syncItem = NSMenuItem(title: "Sync Records Now", action: #selector(menuSyncNow), keyEquivalent: "s")
-        syncItem.target = self
-        menu.addItem(syncItem)
-
-        let finderItem = NSMenuItem(title: "Open Bee Exports in Finder", action: #selector(menuOpenFinder), keyEquivalent: "f")
-        finderItem.target = self
-        menu.addItem(finderItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let settingsItem = NSMenuItem(title: "Preferences...", action: #selector(menuOpenSettings), keyEquivalent: ",")
-        settingsItem.target = self
-        menu.addItem(settingsItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        let quitItem = NSMenuItem(title: "Quit BeeBar", action: #selector(menuQuit), keyEquivalent: "q")
-        quitItem.target = self
-        menu.addItem(quitItem)
-
-        statusItem.menu = menu
-        statusItem.button?.performClick(nil)
-        statusItem.menu = nil // Reset so regular clicks continue to toggle popover
-    }
-
-    @objc func menuSyncNow() {
-        Task {
-            await BeeStore.shared.performSync()
-        }
-    }
-
-    @objc func menuOpenFinder() {
+    // MARK: - Actions for Settings & Management
+    @objc func openFolderInFinder() {
         BeeStore.shared.openFolderInFinder()
     }
 
-    @objc func menuOpenSettings() {
-        BeeStore.shared.showingSettings = true
-        showPopover(sender: nil)
+    @objc func changeStorageFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+        panel.prompt = "Choose Export Folder"
+        if panel.runModal() == .OK, let url = panel.url {
+            var updated = BeeStore.shared.config
+            updated.storageDir = url.path
+            BeeStore.shared.updateConfig(updated)
+            showNotification(title: "Folder Updated", body: "Bee exports will now be saved to: \(url.path)")
+        }
     }
 
-    @objc func menuQuit() {
+    @objc func switchToProxy() {
+        var updated = BeeStore.shared.config
+        updated.endpoint = "http://127.0.0.1:8787"
+        BeeStore.shared.updateConfig(updated)
+        showNotification(title: "Bee Connection", body: "Switched to Local Proxy (127.0.0.1:8787).")
+    }
+
+    @objc func switchToPublicApi() {
+        var updated = BeeStore.shared.config
+        updated.endpoint = "https://api.developer.bee.amazon.dev"
+        BeeStore.shared.updateConfig(updated)
+        showNotification(title: "Bee Connection", body: "Switched to Public API.")
+    }
+
+    @objc func promptForToken() {
+        let alert = NSAlert()
+        alert.messageText = "Set Bee Developer Bearer Token"
+        alert.informativeText = "Paste your Bee developer Bearer token ($BEE_TOKEN):"
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        input.stringValue = BeeStore.shared.config.token
+        alert.accessoryView = input
+        alert.addButton(withTitle: "Save")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            var updated = BeeStore.shared.config
+            updated.token = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            BeeStore.shared.updateConfig(updated)
+            showNotification(title: "Token Saved", body: "Bearer token updated.")
+        }
+    }
+
+    @objc func testConnection() {
+        Task {
+            let engine = BeeSyncEngine(config: BeeStore.shared.config)
+            let res = await engine.testConnection()
+            await MainActor.run {
+                let alert = NSAlert()
+                alert.messageText = res.success ? "Connection Succeeded" : "Connection Failed"
+                alert.informativeText = res.message
+                alert.runModal()
+            }
+        }
+    }
+
+    @objc func setFrequency(_ sender: NSMenuItem) {
+        var updated = BeeStore.shared.config
+        updated.syncIntervalMinutes = sender.tag
+        BeeStore.shared.updateConfig(updated)
+        showNotification(title: "Sync Schedule Updated", body: "Frequency set to \(formatFrequency(sender.tag)).")
+    }
+
+    @objc func updateNow() {
+        Task {
+            await BeeStore.shared.performSync()
+            showNotification(title: "Bee Sync Complete", body: "Latest conversations and transcripts are current.")
+        }
+    }
+
+    @objc func updateAll() {
+        Task {
+            await BeeStore.shared.performSync()
+            showNotification(title: "Bee Archive Synced", body: "All conversations and transcripts are current.")
+        }
+    }
+
+    @objc func openPreferences() {
+        if preferencesWindow == nil {
+            let win = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 380, height: 490),
+                styleMask: [.titled, .closable],
+                backing: .buffered,
+                defer: false
+            )
+            win.center()
+            win.title = "BeeBar Preferences"
+            win.isReleasedWhenClosed = false
+            win.contentView = NSHostingView(rootView: SettingsView(store: BeeStore.shared))
+            self.preferencesWindow = win
+        }
+        preferencesWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    @objc func quitApp() {
         NSApp.terminate(nil)
+    }
+
+    // MARK: - Helpers
+    private func formatFrequency(_ mins: Int) -> String {
+        switch mins {
+        case 0: return "Manual Only"
+        case 1: return "Every 1 min"
+        case 5: return "Every 5 min"
+        case 15: return "Every 15 min"
+        case 1440: return "Daily (24h)"
+        case 10080: return "Weekly"
+        default: return "Every \(mins) min"
+        }
+    }
+
+    private func getCleanSummary(conv: BeeConversationItem) -> String {
+        var s = conv.summarySnippet ?? ""
+        if s.isEmpty {
+            let mdPath = conv.markdownPath(storageDir: BeeStore.shared.config.storageDir)
+            if let content = try? String(contentsOfFile: mdPath, encoding: .utf8) {
+                s = content
+            }
+        }
+        // Remove markdown hashes
+        return s.replacingOccurrences(of: "## Summary", with: "")
+                .replacingOccurrences(of: "##", with: "")
+                .replacingOccurrences(of: "#", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func extractFirstLine(_ text: String) -> String {
+        let lines = text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        for line in lines {
+            if !line.isEmpty && !line.hasPrefix("---") && !line.hasPrefix("id:") && !line.hasPrefix("title:") {
+                return line
+            }
+        }
+        return ""
+    }
+
+    private func promptForGeminiKey() -> String {
+        let alert = NSAlert()
+        alert.messageText = "Gemini API Key Needed"
+        alert.informativeText = "Enter your Google Gemini API key to enable instant Flash Lite summarization:"
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 320, height: 24))
+        input.placeholderString = "AIzaSy..."
+        alert.accessoryView = input
+        alert.addButton(withTitle: "Save & Summarize")
+        alert.addButton(withTitle: "Cancel")
+        if alert.runModal() == .alertFirstButtonReturn {
+            let key = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !key.isEmpty {
+                var updated = BeeStore.shared.config
+                updated.geminiApiKey = key
+                BeeStore.shared.updateConfig(updated)
+                return key
+            }
+        }
+        return ""
+    }
+
+    private func showNotification(title: String, body: String) {
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body
+        content.sound = .default
+        let req = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(req, withCompletionHandler: nil)
     }
 }

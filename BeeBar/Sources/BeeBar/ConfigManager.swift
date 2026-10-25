@@ -6,19 +6,22 @@ public struct BeeConfig: Codable, Sendable {
     public var storageDir: String
     public var syncIntervalMinutes: Int
     public var lastSyncedAt: Double?
+    public var geminiApiKey: String
 
     public init(
         endpoint: String = "http://127.0.0.1:8787",
         token: String = "",
         storageDir: String = "",
         syncIntervalMinutes: Int = 5,
-        lastSyncedAt: Double? = nil
+        lastSyncedAt: Double? = nil,
+        geminiApiKey: String = ""
     ) {
         self.endpoint = endpoint
         self.token = token
         self.storageDir = storageDir.isEmpty ? (FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Bee Exports").path) : storageDir
         self.syncIntervalMinutes = syncIntervalMinutes
         self.lastSyncedAt = lastSyncedAt
+        self.geminiApiKey = geminiApiKey
     }
 }
 
@@ -49,6 +52,7 @@ public final class ConfigManager: Sendable {
                 var storageDir: String?
                 var syncIntervalMinutes: Int?
                 var lastSyncedAt: Double?
+                var geminiApiKey: String?
             }
             let decoded = try JSONDecoder().decode(PartialConfig.self, from: data)
             let defaultStorage = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Documents/Bee Exports").path
@@ -57,7 +61,8 @@ public final class ConfigManager: Sendable {
                 token: decoded.token ?? "",
                 storageDir: decoded.storageDir ?? defaultStorage,
                 syncIntervalMinutes: decoded.syncIntervalMinutes ?? 5,
-                lastSyncedAt: decoded.lastSyncedAt
+                lastSyncedAt: decoded.lastSyncedAt,
+                geminiApiKey: decoded.geminiApiKey ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"] ?? ""
             )
         } catch {
             return BeeConfig()
@@ -77,6 +82,7 @@ public final class ConfigManager: Sendable {
             existingDict["token"] = config.token
             existingDict["storageDir"] = config.storageDir
             existingDict["syncIntervalMinutes"] = config.syncIntervalMinutes
+            existingDict["geminiApiKey"] = config.geminiApiKey
             if let last = config.lastSyncedAt {
                 existingDict["lastSyncedAt"] = last
             }
