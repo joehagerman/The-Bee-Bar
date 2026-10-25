@@ -132,6 +132,16 @@ public actor BeeSyncEngine {
 
             let mdTrContent = formatPureTranscriptMarkdown(conv: fullConv, id: safeId)
             try? mdTrContent.write(to: URL(fileURLWithPath: mdTranscriptPath), atomically: true, encoding: .utf8)
+
+            // Set file creation & modification dates to match conversation time
+            let convDate = parseTimestamp(fullConv["start_time"])
+                ?? parseTimestamp(fullConv["created_at"])
+                ?? parseTimestamp(fullConv["timestamp"])
+                ?? Date()
+            setFileDate(path: jsonPath, date: convDate)
+            setFileDate(path: mdPath, date: convDate)
+            setFileDate(path: txtPath, date: convDate)
+            setFileDate(path: mdTranscriptPath, date: convDate)
         }
 
         // Rebuild or update metadata.json
@@ -198,6 +208,17 @@ public actor BeeSyncEngine {
             let createdAt = c["start_time"] ?? c["created_at"] ?? c["timestamp"]
             let summary = (c["summary"] as? String) ?? (c["short_summary"] as? String) ?? ""
             let snippet = String(summary.replacingOccurrences(of: "\n", with: " ").prefix(200))
+
+            if let date = parseTimestamp(createdAt) {
+                let mdPath = (convDir as NSString).appendingPathComponent("\(safeId).md")
+                let transcriptsDir = (config.storageDir as NSString).appendingPathComponent("transcripts")
+                let txtPath = (transcriptsDir as NSString).appendingPathComponent("\(safeId)_transcript.txt")
+                let mdTrPath = (transcriptsDir as NSString).appendingPathComponent("\(safeId)_transcript.md")
+                setFileDate(path: fullPath, date: date)
+                setFileDate(path: mdPath, date: date)
+                setFileDate(path: txtPath, date: date)
+                setFileDate(path: mdTrPath, date: date)
+            }
 
             let utterances = extractUtterances(c)
             let (tags, keywords) = classify(title: title, summary: summary)
@@ -370,5 +391,34 @@ public actor BeeSyncEngine {
         }
         if tags.isEmpty { tags.append("General Work") }
         return (tags, keywords)
+    }
+
+    private func parseTimestamp(_ raw: Any?) -> Date? {
+        guard let raw = raw else { return nil }
+        if let d = raw as? Double {
+            return Date(timeIntervalSince1970: d > 1e11 ? d / 1000.0 : d)
+        }
+        if let i = raw as? Int {
+            let d = Double(i)
+            return Date(timeIntervalSince1970: d > 1e11 ? d / 1000.0 : d)
+        }
+        if let s = raw as? String {
+            if let d = Double(s) {
+                return Date(timeIntervalSince1970: d > 1e11 ? d / 1000.0 : d)
+            }
+            let iso = ISO8601DateFormatter()
+            iso.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            if let date = iso.date(from: s) { return date }
+            iso.formatOptions = [.withInternetDateTime]
+            return iso.date(from: s)
+        }
+        return nil
+    }
+
+    private func setFileDate(path: String, date: Date) {
+        try? FileManager.default.setAttributes([
+            .creationDate: date,
+            .modificationDate: date
+        ], ofItemAtPath: path)
     }
 }

@@ -23,6 +23,30 @@ const {
   classifyConversation
 } = require('./markdown-formatter');
 
+function applyFileTimestamp(filePath, timestamp) {
+  if (!timestamp || !fs.existsSync(filePath)) return;
+  try {
+    let date;
+    if (typeof timestamp === 'number') {
+      date = new Date(timestamp > 1e11 ? timestamp : timestamp * 1000);
+    } else if (typeof timestamp === 'string') {
+      const num = Number(timestamp);
+      if (!isNaN(num) && num > 0) {
+        date = new Date(num > 1e11 ? num : num * 1000);
+      } else {
+        date = new Date(timestamp);
+      }
+    } else if (timestamp instanceof Date) {
+      date = timestamp;
+    }
+    if (date && !isNaN(date.getTime())) {
+      fs.utimesSync(filePath, date, date);
+    }
+  } catch (e) {
+    // ignore
+  }
+}
+
 class BeeSyncEngine {
   constructor(options = {}) {
     this.endpoint = options.endpoint || 'http://127.0.0.1:8787';
@@ -375,6 +399,8 @@ class BeeSyncEngine {
 
           const dTitle = fullDaily.short_summary || fullDaily.title || `Daily Summary ${safeId}`;
           const dDate = fullDaily.date_time || fullDaily.date || fullDaily.created_at;
+          applyFileTimestamp(jsonPath, dDate);
+          applyFileTimestamp(mdPath, dDate);
 
           indexData.daily.push({
             id: safeId,
@@ -470,6 +496,12 @@ class BeeSyncEngine {
           if (!fs.existsSync(mdTranscriptPath) || force) {
             fs.writeFileSync(mdTranscriptPath, formatPureTranscriptMarkdown(fullConv));
           }
+
+          const convTimestamp = fullConv.start_time || fullConv.created_at || fullConv.timestamp;
+          applyFileTimestamp(jsonPath, convTimestamp);
+          applyFileTimestamp(mdPath, convTimestamp);
+          applyFileTimestamp(txtTranscriptPath, convTimestamp);
+          applyFileTimestamp(mdTranscriptPath, convTimestamp);
 
           indexData.conversations.push({
             id: safeId,
@@ -569,11 +601,18 @@ class BeeSyncEngine {
           // Ensure transcript files are created if missing
           const txtTranscriptPath = path.join(this.storageDir, 'transcripts', `${safeId}_transcript.txt`);
           const mdTranscriptPath = path.join(this.storageDir, 'transcripts', `${safeId}_transcript.md`);
+          const convTime = c.start_time || c.created_at || c.timestamp;
           if (!fs.existsSync(txtTranscriptPath)) {
-            try { fs.writeFileSync(txtTranscriptPath, formatPureTranscriptText(c)); } catch (e) {}
+            try { 
+              fs.writeFileSync(txtTranscriptPath, formatPureTranscriptText(c)); 
+              applyFileTimestamp(txtTranscriptPath, convTime);
+            } catch (e) {}
           }
           if (!fs.existsSync(mdTranscriptPath)) {
-            try { fs.writeFileSync(mdTranscriptPath, formatPureTranscriptMarkdown(c)); } catch (e) {}
+            try { 
+              fs.writeFileSync(mdTranscriptPath, formatPureTranscriptMarkdown(c)); 
+              applyFileTimestamp(mdTranscriptPath, convTime);
+            } catch (e) {}
           }
 
           indexData.conversations.push({
