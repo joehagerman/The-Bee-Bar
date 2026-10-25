@@ -1,2 +1,6 @@
 node_modules/
 .DS_Store
+.build/
+*.app/
+BeeBar/.build/
+BeeBar/BeeBar.app/
