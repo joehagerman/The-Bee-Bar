@@ -9,6 +9,10 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var preferencesWindow: NSWindow?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // Prevent macOS Automatic Termination from closing this accessory menu bar app
+        ProcessInfo.processInfo.disableAutomaticTermination("BeeBar status item")
+        ProcessInfo.processInfo.disableSuddenTermination()
+
         // Run purely as an accessory menu bar application
         NSApp.setActivationPolicy(.accessory)
 
@@ -30,14 +34,17 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         appMenu.addItem(editMenuItem)
         NSApp.mainMenu = appMenu
 
-        // Setup NSStatusItem with 50% smaller Black & White Bee icon
+        // Setup NSStatusItem with authentic Bee icon
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem.autosaveName = "computer.bee.beebar.statusItem"
+        statusItem.behavior = [.removalAllowed]
+        statusItem.isVisible = true
         if let button = statusItem.button {
             let icon = BeeIcon.createIcon()
             button.image = icon
             button.imagePosition = .imageOnly
             button.imageScaling = .scaleProportionallyDown
-            button.toolTip = "Bee Menu Bar"
+            button.toolTip = "Bee Menu Bar (⌘-drag to reposition)"
         }
 
         // Setup native macOS NSMenu
@@ -47,6 +54,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
         // Initial load of local records
         BeeStore.shared.loadLocalData()
+
+        showNotification(
+            title: "BeeBar is Active",
+            body: "Look for the Bee icon in your menu bar. Tip: Hold ⌘ and drag the icon to move it toward the right side of your menu bar."
+        )
+    }
+
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        return false
     }
 
     // MARK: - NSMenuDelegate (Builds Dynamic Native Menu on Click)
