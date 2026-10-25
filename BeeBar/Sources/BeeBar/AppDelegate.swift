@@ -240,7 +240,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         submenu.addItem(copyTranscriptItem)
 
         let modelName = BeeStore.shared.config.geminiModel
-        let geminiItem = NSMenuItem(title: "Summarize with Gemini (\(modelName))", action: #selector(summarizeWithGemini(_:)), keyEquivalent: "")
+        let geminiItem = NSMenuItem(title: "Copy Gemini Summary (\(modelName))", action: #selector(summarizeWithGemini(_:)), keyEquivalent: "")
         geminiItem.target = self
         geminiItem.representedObject = conv
         submenu.addItem(geminiItem)
@@ -269,20 +269,82 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     // MARK: - Actions for Conversations
     @objc func copySummary(_ sender: NSMenuItem) {
         guard let conv = sender.representedObject as? BeeConversationItem else { return }
-        let store = BeeStore.shared
-        let mdPath = conv.markdownPath(storageDir: store.config.storageDir)
-
-        var summaryText = ""
-        if FileManager.default.fileExists(atPath: mdPath),
-           let content = try? String(contentsOfFile: mdPath, encoding: .utf8) {
-            summaryText = content
-        } else {
-            summaryText = conv.summarySnippet ?? conv.title
-        }
+        let summaryText = extractOriginalBeeSummary(conv)
 
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(summaryText, forType: .string)
         showNotification(title: "Summary Copied", body: "\(conv.title) summary copied to clipboard.")
+    }
+
+    /// Extracts the summary from the original Bee record (c["summary"] in json),
+    /// taking the summary section up to the next heading or transcript.
+    private func extractOriginalBeeSummary(_ conv: BeeConversationItem) -> String {
+        let store = BeeStore.shared
+        var text = ""
+
+        // 1. Read directly from the original Bee JSON record
+        let jsonPath = conv.jsonPath(storageDir: store.config.storageDir)
+        if FileManager.default.fileExists(atPath: jsonPath),
+           let data = try? Data(contentsOf: URL(fileURLWithPath: jsonPath)),
+           let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            let c = (json["conversation"] as? [String: Any]) ?? json
+            if let s = c["summary"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                text = s
+            } else if let s = c["short_summary"] as? String, !s.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                text = s
+            }
+        }
+
+        // 2. Fallback to markdown file if JSON is not available
+        if text.isEmpty {
+            let mdPath = conv.markdownPath(storageDir: store.config.storageDir)
+            if FileManager.default.fileExists(atPath: mdPath),
+               let mdContent = try? String(contentsOfFile: mdPath, encoding: .utf8) {
+                text = mdContent
+            }
+        }
+
+        if text.isEmpty {
+            return conv.summarySnippet ?? conv.title
+        }
+
+        // Strip any YAML frontmatter
+        if text.hasPrefix("---") {
+            let parts = text.components(separatedBy: "---")
+            if parts.count >= 3 {
+                text = parts.dropFirst(2).joined(separator: "---").trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        // Strip transcript if attached
+        for marker in ["## 🎙️ Audio Transcript", "## 🎙️ Transcript", "## Audio Transcript", "## Transcript"] {
+            if let range = text.range(of: marker) {
+                text = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        // Extract clean text under ## Summary / # Summary
+        let summaryHeadings = [
+            "## Summary\n", "## Summary\r\n",
+            "# Summary\n", "# Summary\r\n",
+            "### Summary\n", "### Summary\r\n",
+            "## 📋 Executive Summary\n", "## 📋 Executive Summary\r\n"
+        ]
+
+        for heading in summaryHeadings {
+            if let range = text.range(of: heading) {
+                var chunk = String(text[range.upperBound...])
+                if let nextHeading = chunk.range(of: "\n## ") ?? chunk.range(of: "\n# ") {
+                    chunk = String(chunk[..<nextHeading.lowerBound])
+                }
+                let cleaned = chunk.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !cleaned.isEmpty {
+                    return cleaned
+                }
+            }
+        }
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     @objc func copyTranscript(_ sender: NSMenuItem) {
@@ -321,33 +383,19 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         let chosenModel = store.config.geminiModel
-        showNotification(title: "Gemini (\(chosenModel))", body: "Generating executive brief for \"\(conv.title)\"...")
 
-        Task {
-            do {
-                let flashSummary = try await GeminiService.shared.summarize(text: sourceText, apiKey: apiKey, model: chosenModel)
-
-                await MainActor.run {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(flashSummary, forType: .string)
-
-                    let outPath = (store.config.storageDir as NSString).appendingPathComponent("conversations/\(conv.id)_gemini_brief.md")
-                    try? flashSummary.write(toFile: outPath, atomically: true, encoding: .utf8)
-
-                    self.showNotification(
-                        title: "Gemini Brief Ready (\(chosenModel))",
-                        body: "Copied to clipboard and saved to exports folder."
-                    )
-                }
-            } catch {
-                await MainActor.run {
-                    let alert = NSAlert()
-                    alert.messageText = "Gemini Summarization Failed"
-                    alert.informativeText = error.localizedDescription
-                    alert.runModal()
-                }
-            }
-        }
+        // Trigger interactive floating HUD modal with 3 states:
+        // 1. "Sending to Gemini..."
+        // 2. "Waiting..."
+        // 3. "Returned summary copied to clipboard!"
+        // and automatically copy entire Gemini response to NSPasteboard.general.
+        GeminiProgressModal.shared.startSummarization(
+            conv: conv,
+            sourceText: sourceText,
+            apiKey: apiKey,
+            model: chosenModel,
+            storageDir: store.config.storageDir
+        )
     }
 
     @objc func openMarkdown(_ sender: NSMenuItem) {
