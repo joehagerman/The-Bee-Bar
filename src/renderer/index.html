@@ -18,9 +18,13 @@
         </div>
       </div>
       <div class="titlebar-actions">
-        <button id="btnQuickSync" class="btn btn-primary btn-sm" title="Synchronize all Bee data">
+        <button id="btnSyncAll" class="btn btn-primary btn-sm" title="Sync entire Bee archive across all pages">
+          <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span>Sync All</span>
+        </button>
+        <button id="btnQuickSync" class="btn btn-secondary btn-sm" title="Quickly fetch the most recent items">
           <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
-          <span>Sync Now</span>
+          <span>Sync Recent</span>
         </button>
         <button id="btnAccountBadge" class="btn btn-ghost btn-sm" title="Account & Connection">
           <span class="status-indicator status-offline" id="connStatusDot"></span>

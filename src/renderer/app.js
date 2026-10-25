@@ -33,6 +33,7 @@ const el = {
   btnAccountBadge: document.getElementById('btnAccountBadge'),
   connStatusDot: document.getElementById('connStatusDot'),
   connStatusText: document.getElementById('connStatusText'),
+  btnSyncAll: document.getElementById('btnSyncAll'),
   btnQuickSync: document.getElementById('btnQuickSync'),
 
   // Panes
@@ -867,22 +868,24 @@ window.openSearchResult = function(type, id) {
 };
 
 // Syncing
-window.startSyncProcess = async function() {
+window.startSyncProcess = async function(mode = 'all') {
   el.syncModal.style.display = 'flex';
   el.syncProgressFill.style.width = '0%';
   el.syncProgressPercent.textContent = '0%';
-  el.syncProgressMessage.textContent = 'Connecting to Bee API...';
-  el.syncLogs.innerHTML = '<div>Starting sync session...</div>';
+  el.syncProgressMessage.textContent = mode === 'all'
+    ? 'Connecting to Bee API (Syncing All Records)...'
+    : 'Connecting to Bee API (Syncing Recent Records)...';
+  el.syncLogs.innerHTML = `<div>Starting ${mode === 'all' ? 'Complete Archive Sync' : 'Recent Sync'} session...</div>`;
 
   try {
-    const result = await window.beeAPI.startSync();
+    const result = await window.beeAPI.startSync({ mode });
     if (result.success) {
       appendSyncLog('Sync completed successfully!');
       setTimeout(async () => {
         el.syncModal.style.display = 'none';
         await refreshLocalData();
         checkStatusIndicator();
-      }, 800);
+      }, 1000);
     } else {
       appendSyncLog(`Sync stopped: ${result.error || 'Unknown error'}`);
     }
@@ -912,7 +915,8 @@ function setupEventListeners() {
   });
 
   el.btnAccountBadge.addEventListener('click', () => switchView('settings'));
-  el.btnQuickSync.addEventListener('click', startSyncProcess);
+  if (el.btnSyncAll) el.btnSyncAll.addEventListener('click', () => startSyncProcess('all'));
+  if (el.btnQuickSync) el.btnQuickSync.addEventListener('click', () => startSyncProcess('recent'));
 
   // Search inputs
   el.searchInput.addEventListener('input', () => renderActiveView());

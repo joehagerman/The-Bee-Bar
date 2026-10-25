@@ -38,7 +38,7 @@ class BeeSyncEngine {
   getHeaders() {
     const headers = {
       'Accept': 'application/json',
-      'Content-Type': 'application/json'
+      'Content-Type': 'application/json; charset=utf-8'
     };
     if (this.token && !this.endpoint.includes('127.0.0.1') && !this.endpoint.includes('localhost')) {
       headers['Authorization'] = `Bearer ${this.token}`;
@@ -95,25 +95,6 @@ class BeeSyncEngine {
     }
   }
 
-  async searchApi({ query, neural = false, limit = 15 }) {
-    const endpointPath = neural ? '/v1/search/conversations/neural' : '/v1/search/conversations';
-    const url = `${this.endpoint}${endpointPath}`;
-    const headers = this.getHeaders();
-    headers['Content-Type'] = 'application/json; charset=utf-8';
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({ query, limit })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Search failed (${response.status}): ${await response.text()}`);
-    }
-
-    return await response.json();
-  }
-
   async fetchApi(pathUrl) {
     const cleanPath = pathUrl.startsWith('/') ? pathUrl : `/${pathUrl}`;
     const url = `${this.endpoint}${cleanPath}`;
@@ -130,21 +111,88 @@ class BeeSyncEngine {
     return await response.json();
   }
 
-  async syncAll(progressCallback = () => {}) {
+  async fetchAllPages(endpoint, primaryKey, fallbackKeys = [], maxPages = 100, onPageCallback = () => {}) {
+    const allItems = [];
+    let cursor = null;
+    let page = 1;
+
+    do {
+      if (this.cancelRequested) break;
+      const separator = endpoint.includes('?') ? '&' : '?';
+      const url = cursor 
+        ? `${endpoint}${separator}cursor=${encodeURIComponent(cursor)}` 
+        : endpoint;
+
+      let data;
+      try {
+        data = await this.fetchApi(url);
+      } catch (e) {
+        console.warn(`Pagination fetch error on ${url}:`, e.message);
+        break;
+      }
+
+      let items = data[primaryKey];
+      if (!Array.isArray(items)) {
+        for (const fk of fallbackKeys) {
+          if (Array.isArray(data[fk])) {
+            items = data[fk];
+            break;
+          }
+        }
+      }
+
+      if (Array.isArray(items)) {
+        allItems.push(...items);
+        onPageCallback(page, allItems.length);
+      }
+
+      cursor = data.next_cursor || null;
+      page++;
+      if (page > maxPages) break;
+    } while (cursor);
+
+    return allItems;
+  }
+
+  async searchApi({ query, neural = false, limit = 15 }) {
+    const endpointPath = neural ? '/v1/search/conversations/neural' : '/v1/search/conversations';
+    const url = `${this.endpoint}${endpointPath}`;
+    const headers = this.getHeaders();
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ query, limit })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Search failed (${response.status}): ${await response.text()}`);
+    }
+
+    return await response.json();
+  }
+
+  async syncAll(options = {}, progressCallback = () => {}) {
     if (this.isSyncing) {
       throw new Error('Sync is already in progress.');
     }
+
+    const syncMode = (typeof options === 'string' ? options : options.mode) || 'all';
+    const force = typeof options === 'object' && options.force ? true : false;
+    const isAll = syncMode === 'all';
 
     this.isSyncing = true;
     this.cancelRequested = false;
     this.ensureDirectories();
 
     const stats = {
+      mode: syncMode,
       conversations: 0,
       dailySummaries: 0,
       journals: 0,
       todos: 0,
       facts: 0,
+      insights: 0,
       startTime: Date.now(),
       errors: []
     };
@@ -156,30 +204,38 @@ class BeeSyncEngine {
       daily: [],
       journals: [],
       todos: [],
-      facts: []
+      facts: [],
+      insights: []
     };
 
     try {
-      progressCallback({ stage: 'init', message: 'Connecting to Bee API (/v1/me)...', percent: 5 });
+      progressCallback({ stage: 'init', message: `Initializing ${isAll ? 'complete archive' : 'recent'} sync...`, percent: 3 });
       
       let userProfile = null;
       try {
         userProfile = await this.fetchApi('/v1/me');
         indexData.user = userProfile;
       } catch (e) {
-        progressCallback({ stage: 'warn', message: `Profile fetch warning: ${e.message}`, percent: 8 });
+        progressCallback({ stage: 'warn', message: `Profile fetch warning: ${e.message}`, percent: 5 });
       }
 
       if (this.cancelRequested) throw new Error('Sync cancelled by user.');
 
       // 1. Facts
-      progressCallback({ stage: 'facts', message: 'Downloading facts memory bank (/v1/facts)...', percent: 12 });
+      progressCallback({ stage: 'facts', message: isAll ? 'Paging through all facts...' : 'Downloading recent facts...', percent: 8 });
       try {
-        const factsData = await this.fetchApi('/v1/facts');
-        const facts = Array.isArray(factsData) ? factsData : (factsData.facts || []);
+        let facts = [];
+        if (isAll) {
+          facts = await this.fetchAllPages('/v1/facts', 'facts', [], 50, (p, total) => {
+            progressCallback({ stage: 'facts', message: `Found ${total} facts (Page ${p})...`, percent: 10 });
+          });
+        } else {
+          const factsData = await this.fetchApi('/v1/facts');
+          facts = Array.isArray(factsData) ? factsData : (factsData.facts || []);
+        }
+
         stats.facts = facts.length;
         indexData.facts = facts;
-
         fs.writeFileSync(path.join(this.storageDir, 'facts', 'facts.json'), JSON.stringify(facts, null, 2));
         fs.writeFileSync(path.join(this.storageDir, 'facts', 'facts.md'), formatFactsMarkdown(facts));
       } catch (err) {
@@ -189,14 +245,19 @@ class BeeSyncEngine {
       if (this.cancelRequested) throw new Error('Sync cancelled by user.');
 
       // 2. Todos & Suggestions
-      progressCallback({ stage: 'todos', message: 'Downloading todos and action items (/v1/todos)...', percent: 20 });
+      progressCallback({ stage: 'todos', message: 'Downloading action items and todos...', percent: 14 });
       try {
-        const todosData = await this.fetchApi('/v1/todos');
-        const todos = Array.isArray(todosData) ? todosData : (todosData.todos || []);
+        let todos = [];
+        if (isAll) {
+          todos = await this.fetchAllPages('/v1/todos', 'todos', [], 10);
+        } else {
+          const todosData = await this.fetchApi('/v1/todos');
+          todos = Array.isArray(todosData) ? todosData : (todosData.todos || []);
+        }
+
         stats.todos = todos.length;
         indexData.todos = todos;
 
-        // Also fetch suggestions if available
         try {
           const suggData = await this.fetchApi('/v1/todoSuggestions');
           indexData.todoSuggestions = suggData.todoSuggestions || [];
@@ -211,8 +272,8 @@ class BeeSyncEngine {
 
       if (this.cancelRequested) throw new Error('Sync cancelled by user.');
 
-      // 2b. Insights & Behavioral Patterns
-      progressCallback({ stage: 'insights', message: 'Downloading behavioral insights (/v1/insights)...', percent: 25 });
+      // 3. Behavioral Insights
+      progressCallback({ stage: 'insights', message: 'Downloading AI behavioral insights (/v1/insights)...', percent: 18 });
       try {
         const insightsData = await this.fetchApi('/v1/insights');
         const insights = Array.isArray(insightsData) ? insightsData : (insightsData.insights || []);
@@ -221,18 +282,21 @@ class BeeSyncEngine {
 
         fs.writeFileSync(path.join(this.storageDir, 'insights', 'insights.json'), JSON.stringify(insights, null, 2));
         fs.writeFileSync(path.join(this.storageDir, 'insights', 'insights.md'), formatInsightsMarkdown(insights));
-      } catch (err) {
-        // Optional endpoint
-      }
+      } catch (err) {}
 
       if (this.cancelRequested) throw new Error('Sync cancelled by user.');
 
-      // 3. Journals
-      progressCallback({ stage: 'journals', message: 'Fetching journals (/v1/journals)...', percent: 30 });
+      // 4. Journals
+      progressCallback({ stage: 'journals', message: 'Checking journals and voice memos...', percent: 22 });
       try {
-        const journalsData = await this.fetchApi('/v1/journals');
-        const journals = Array.isArray(journalsData) ? journalsData : (journalsData.journals || []);
-        
+        let journals = [];
+        if (isAll) {
+          journals = await this.fetchAllPages('/v1/journals', 'journals', [], 10);
+        } else {
+          const journalsData = await this.fetchApi('/v1/journals');
+          journals = Array.isArray(journalsData) ? journalsData : (journalsData.journals || []);
+        }
+
         let jCount = 0;
         for (const jItem of journals) {
           if (this.cancelRequested) break;
@@ -262,31 +326,52 @@ class BeeSyncEngine {
 
       if (this.cancelRequested) throw new Error('Sync cancelled by user.');
 
-      // 4. Daily Summaries
-      progressCallback({ stage: 'daily', message: 'Fetching daily executive summaries (/v1/daily)...', percent: 45 });
+      // 5. Daily Summaries
+      progressCallback({ stage: 'daily', message: isAll ? 'Paging through all daily summaries...' : 'Downloading recent daily summaries...', percent: 28 });
       try {
-        const dailyData = await this.fetchApi('/v1/daily');
-        const dailies = Array.isArray(dailyData) ? dailyData : (dailyData.daily_summaries || dailyData.daily || dailyData.summaries || []);
-        
+        let dailies = [];
+        if (isAll) {
+          dailies = await this.fetchAllPages('/v1/daily', 'daily_summaries', ['daily', 'summaries'], 30, (p, total) => {
+            progressCallback({ stage: 'daily', message: `Found ${total} daily summaries across ${p} pages...`, percent: 30 });
+          });
+        } else {
+          const dailyData = await this.fetchApi('/v1/daily');
+          dailies = Array.isArray(dailyData) ? dailyData : (dailyData.daily_summaries || dailyData.daily || dailyData.summaries || []);
+        }
+
         let dCount = 0;
-        for (let idx = 0; idx < dailies.length; idx++) {
+        const totalDailies = dailies.length;
+
+        for (let idx = 0; idx < totalDailies; idx++) {
           if (this.cancelRequested) break;
           const dItem = dailies[idx];
           const dId = dItem.id || dItem.date;
+          const safeId = String(dId || `daily_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+          const jsonPath = path.join(this.storageDir, 'daily', `${safeId}.json`);
+          const mdPath = path.join(this.storageDir, 'daily', `${safeId}.md`);
+
           let fullDaily = dItem;
-          if (dId) {
+          // Reuse existing file if available to speed up sync unless forced
+          if (!force && fs.existsSync(jsonPath) && fs.statSync(jsonPath).size > 10) {
+            try {
+              const cached = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+              fullDaily = cached.daily_summary || cached;
+            } catch(e) {}
+          } else if (dId) {
             try {
               const res = await this.fetchApi(`/v1/daily/${dId}`);
               fullDaily = res.daily_summary || res;
-            } catch (de) {}
+              fs.writeFileSync(jsonPath, JSON.stringify(fullDaily, null, 2));
+              fs.writeFileSync(mdPath, formatDailySummaryMarkdown(fullDaily));
+            } catch (de) {
+              fs.writeFileSync(jsonPath, JSON.stringify(fullDaily, null, 2));
+              fs.writeFileSync(mdPath, formatDailySummaryMarkdown(fullDaily));
+            }
           }
-          const safeId = String(dId || `daily_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
+
           const dTitle = fullDaily.short_summary || fullDaily.title || `Daily Summary ${safeId}`;
           const dDate = fullDaily.date_time || fullDaily.date || fullDaily.created_at;
 
-          fs.writeFileSync(path.join(this.storageDir, 'daily', `${safeId}.json`), JSON.stringify(fullDaily, null, 2));
-          fs.writeFileSync(path.join(this.storageDir, 'daily', `${safeId}.md`), formatDailySummaryMarkdown(fullDaily));
-          
           indexData.daily.push({
             id: safeId,
             date: dDate,
@@ -294,6 +379,14 @@ class BeeSyncEngine {
             summarySnippet: (fullDaily.summary || fullDaily.short_summary || fullDaily.text || '').slice(0, 200).replace(/\n/g, ' ')
           });
           dCount++;
+
+          if (idx % 5 === 0 || idx === totalDailies - 1) {
+            progressCallback({
+              stage: 'daily_item',
+              message: `Processed daily summary ${idx + 1} of ${totalDailies}...`,
+              percent: Math.round(30 + (idx / Math.max(1, totalDailies)) * 20)
+            });
+          }
         }
         stats.dailySummaries = dCount;
       } catch (err) {
@@ -302,43 +395,59 @@ class BeeSyncEngine {
 
       if (this.cancelRequested) throw new Error('Sync cancelled by user.');
 
-      // 5. Conversations & Transcripts
-      progressCallback({ stage: 'conversations', message: 'Fetching conversation list (/v1/conversations)...', percent: 60 });
+      // 6. Conversations & Transcripts
+      progressCallback({ stage: 'conversations', message: isAll ? 'Paging through all conversations in your history...' : 'Fetching conversation list...', percent: 50 });
       try {
-        const convsData = await this.fetchApi('/v1/conversations');
-        const convList = Array.isArray(convsData) ? convsData : (convsData.conversations || []);
-        
+        let convList = [];
+        if (isAll) {
+          convList = await this.fetchAllPages('/v1/conversations', 'conversations', [], 50, (p, total) => {
+            progressCallback({ stage: 'conversations_page', message: `Found ${total} conversations across ${p} pages...`, percent: 53 });
+          });
+        } else {
+          const convsData = await this.fetchApi('/v1/conversations');
+          convList = Array.isArray(convsData) ? convsData : (convsData.conversations || []);
+        }
+
         let cCount = 0;
         const totalConvs = convList.length;
-        
+
         for (let i = 0; i < totalConvs; i++) {
           if (this.cancelRequested) break;
           const convItem = convList[i];
           const convId = convItem.id;
-          let fullConv = convItem;
-
-          const shortTitle = convItem.short_summary || convItem.title || convId || 'Conversation';
-          progressCallback({
-            stage: 'conversations_item',
-            message: `Downloading transcript ${i + 1} of ${totalConvs}: "${shortTitle.slice(0, 40)}"...`,
-            percent: Math.round(60 + (i / Math.max(1, totalConvs)) * 38)
-          });
-
-          if (convId) {
-            try {
-              const res = await this.fetchApi(`/v1/conversations/${convId}`);
-              fullConv = res.conversation || res;
-            } catch (ce) {
-              console.warn(`Detail fetch failed for conversation ${convId}:`, ce.message);
-            }
-          }
-
           const safeId = String(convId || `conv_${Date.now()}`).replace(/[^a-zA-Z0-9_-]/g, '_');
           const jsonPath = path.join(this.storageDir, 'conversations', `${safeId}.json`);
           const mdPath = path.join(this.storageDir, 'conversations', `${safeId}.md`);
 
-          fs.writeFileSync(jsonPath, JSON.stringify(fullConv, null, 2));
-          fs.writeFileSync(mdPath, formatConversationMarkdown(fullConv));
+          let fullConv = convItem;
+
+          // If file already exists locally with non-empty content, reuse it to save bandwidth and speed up full sync!
+          const alreadyExists = !force && fs.existsSync(jsonPath) && fs.statSync(jsonPath).size > 10;
+
+          if (alreadyExists) {
+            try {
+              const cached = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+              fullConv = cached.conversation || cached;
+            } catch (e) {}
+          } else if (convId) {
+            const shortTitle = convItem.short_summary || convItem.title || convId || 'Conversation';
+            progressCallback({
+              stage: 'conversations_download',
+              message: `Downloading transcript ${i + 1} of ${totalConvs}: "${shortTitle.slice(0, 35)}"...`,
+              percent: Math.round(55 + (i / Math.max(1, totalConvs)) * 43)
+            });
+
+            try {
+              const res = await this.fetchApi(`/v1/conversations/${convId}`);
+              fullConv = res.conversation || res;
+              fs.writeFileSync(jsonPath, JSON.stringify(fullConv, null, 2));
+              fs.writeFileSync(mdPath, formatConversationMarkdown(fullConv));
+            } catch (ce) {
+              console.warn(`Detail fetch failed for conversation ${convId}:`, ce.message);
+              fs.writeFileSync(jsonPath, JSON.stringify(fullConv, null, 2));
+              fs.writeFileSync(mdPath, formatConversationMarkdown(fullConv));
+            }
+          }
 
           const durMs = fullConv.duration_ms || (fullConv.end_time && fullConv.start_time ? (fullConv.end_time - fullConv.start_time) : null);
           const utterances = getUtterances(fullConv);
@@ -355,6 +464,14 @@ class BeeSyncEngine {
             utteranceCount: utterances.length
           });
           cCount++;
+
+          if (alreadyExists && (i % 10 === 0 || i === totalConvs - 1)) {
+            progressCallback({
+              stage: 'conversations_cached',
+              message: `Verified transcript ${i + 1} of ${totalConvs}...`,
+              percent: Math.round(55 + (i / Math.max(1, totalConvs)) * 43)
+            });
+          }
         }
         stats.conversations = cCount;
       } catch (err) {
@@ -367,7 +484,7 @@ class BeeSyncEngine {
       stats.durationMs = Date.now() - stats.startTime;
       progressCallback({ 
         stage: 'completed', 
-        message: `Sync complete! Saved ${stats.conversations} transcripts, ${stats.dailySummaries} daily summaries, ${stats.todos} todos, and ${stats.facts} facts.`, 
+        message: `Sync complete! Saved ${stats.conversations} conversations, ${stats.dailySummaries} daily summaries, ${stats.facts} facts, and ${stats.todos} todos.`, 
         percent: 100, 
         stats 
       });
@@ -396,9 +513,7 @@ class BeeSyncEngine {
       try {
         const raw = fs.readFileSync(metaPath, 'utf8');
         return JSON.parse(raw);
-      } catch (e) {
-        // Fall back to scanning files
-      }
+      } catch (e) {}
     }
 
     // Build index by scanning folders
@@ -408,7 +523,8 @@ class BeeSyncEngine {
       daily: [],
       journals: [],
       todos: [],
-      facts: []
+      facts: [],
+      insights: []
     };
 
     // Scan conversations
@@ -518,7 +634,7 @@ class BeeSyncEngine {
   }
 
   getItemFile(type, id) {
-    const validTypes = ['conversations', 'daily', 'journals'];
+    const validTypes = ['conversations', 'daily', 'journals', 'insights'];
     if (!validTypes.includes(type)) {
       throw new Error(`Invalid type: ${type}`);
     }

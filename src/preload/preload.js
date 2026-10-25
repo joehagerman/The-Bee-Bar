@@ -6,7 +6,7 @@ contextBridge.exposeInMainWorld('beeAPI', {
   testConnection: (customConfig) => ipcRenderer.invoke('test-connection', customConfig),
   checkLocalProxy: () => ipcRenderer.invoke('check-local-proxy'),
   selectStorageFolder: () => ipcRenderer.invoke('select-storage-folder'),
-  startSync: () => ipcRenderer.invoke('start-sync'),
+  startSync: (options) => ipcRenderer.invoke('start-sync', options),
   cancelSync: () => ipcRenderer.invoke('cancel-sync'),
   getLocalData: () => ipcRenderer.invoke('get-local-data'),
   searchApi: (options) => ipcRenderer.invoke('search-api', options),

@@ -145,13 +145,13 @@ ipcMain.handle('select-storage-folder', async () => {
   return null;
 });
 
-ipcMain.handle('start-sync', async (event) => {
+ipcMain.handle('start-sync', async (event, options = {}) => {
   if (!syncEngine) {
     syncEngine = new BeeSyncEngine(loadConfig());
   }
 
   try {
-    const result = await syncEngine.syncAll((progress) => {
+    const result = await syncEngine.syncAll(options, (progress) => {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('sync-progress', progress);
       }
