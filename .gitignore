@@ -4,3 +4,12 @@ node_modules/
 *.app/
 BeeBar/.build/
 BeeBar/BeeBar.app/
+
+# Configuration, Secrets & Local User Data
+*.env
+*.env.*
+*.key
+*.pem
+*.token
+config.json
+credentials.json
