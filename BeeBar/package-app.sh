@@ -26,9 +26,9 @@ cat <<EOF > "$APP_BUNDLE/Contents/Info.plist"
     <key>CFBundleIdentifier</key>
     <string>computer.bee.beebar</string>
     <key>CFBundleName</key>
-    <string>BeeBar</string>
+    <string>The Bee Bar</string>
     <key>CFBundleDisplayName</key>
-    <string>Bee Menu Bar</string>
+    <string>The Bee Bar</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>

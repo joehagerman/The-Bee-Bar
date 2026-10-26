@@ -1,6 +1,6 @@
-# 🐝 Bee Desktop Companion
+# 🐝 The Bee Bar
 
-A native macOS desktop application designed for **Bee.computer** users with Developer Mode enabled. 
+A native macOS menu bar and companion application designed for **Bee.computer** users with Developer Mode enabled. 
 
 Connect to your Bee account, download all your conversational audio transcripts, executive summaries, journals, action items, and facts, and browse or export them in both human-readable GitHub-flavored Markdown (`.md`) and raw JSON (`.json`).
 
@@ -80,7 +80,7 @@ npm start
 ## 🔐 How to Connect Your Bee Account
 
 ### Method A: Direct Public API (Default)
-1. In the Bee Desktop app, click **Settings & Auth** in the sidebar.
+1. In The Bee Bar app, click **Settings & Auth** in the sidebar.
 2. Select **Public API Endpoint** (`https://api.developer.bee.amazon.dev`).
 3. Enter your Bee Bearer Token (found in your Bee developer settings or from `curl` tests).
 4. Click **Verify Connection (GET /v1/me)** to test your login.
@@ -93,7 +93,7 @@ If you already use the Bee CLI on your computer:
    ```bash
    bee proxy
    ```
-2. In the Bee Desktop app, navigate to **Settings & Auth**.
+2. In The Bee Bar app, navigate to **Settings & Auth**.
 3. Select **Local Proxy** (`http://127.0.0.1:8787`).
 4. Click **Verify Connection** and then **Save Configuration**.
 

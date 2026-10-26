@@ -1,7 +1,8 @@
 {
-  "name": "bee-desktop",
+  "name": "the-bee-bar",
+  "productName": "The Bee Bar",
   "version": "1.0.0",
-  "description": "Desktop Companion for bee.computer Developer Mode: login, sync transcripts and executive summaries, and browse markdown & JSON files locally.",
+  "description": "The Bee Bar - Native macOS companion for bee.computer Developer Mode: login, sync transcripts and executive summaries, and browse markdown & JSON files locally.",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",

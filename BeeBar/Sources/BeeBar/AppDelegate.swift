@@ -57,7 +57,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         BeeStore.shared.loadLocalData()
 
         showNotification(
-            title: "BeeBar is Active",
+            title: "The Bee Bar is Active",
             body: "Look for the Bee icon in your menu bar. Tip: Hold ⌘ and drag the icon to reposition it."
         )
     }
@@ -225,7 +225,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         prefsItem.target = self
         menu.addItem(prefsItem)
 
-        let quitItem = NSMenuItem(title: "Quit BeeBar", action: #selector(quitApp), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit The Bee Bar", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
     }
@@ -583,7 +583,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
                 defer: false
             )
             win.center()
-            win.title = "BeeBar Preferences"
+            win.title = "The Bee Bar Preferences"
             win.minSize = CGSize(width: 480, height: 500)
             win.isReleasedWhenClosed = false
             let rootView = SettingsView(store: BeeStore.shared) { [weak win] in

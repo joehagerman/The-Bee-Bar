@@ -94,7 +94,7 @@ struct SettingsView: View {
     private var headerBar: some View {
         VStack(spacing: 12) {
             HStack {
-                Text("BeeBar Settings")
+                Text("The Bee Bar Settings")
                     .font(.title3)
                     .fontWeight(.semibold)
 
@@ -336,7 +336,7 @@ struct SettingsView: View {
                     Text("5. Click 'Verify Connection'")
                         .font(.subheadline)
                         .fontWeight(.medium)
-                    Text("Click the verify button to confirm BeeBar connects to your device profile.")
+                    Text("Click the verify button to confirm The Bee Bar connects to your device profile.")
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }
@@ -453,7 +453,7 @@ struct SettingsView: View {
                 }
                 .pickerStyle(.menu)
 
-                Text("BeeBar automatically polls for new Bee conversations and updates timestamps in the background.")
+                Text("The Bee Bar automatically polls for new Bee conversations and updates timestamps in the background.")
                     .font(.caption2)
                     .foregroundColor(.secondary)
             }
@@ -592,7 +592,7 @@ struct SettingsView: View {
 
     private var footerBar: some View {
         HStack {
-            Button("Quit BeeBar") {
+            Button("Quit The Bee Bar") {
                 NSApplication.shared.terminate(nil)
             }
             .buttonStyle(.bordered)
