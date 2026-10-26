@@ -19,13 +19,13 @@ public struct BeeConfig: Codable, Sendable {
     public static let defaultGeminiPrompt = """
 You are an elite executive intelligence assistant. Summarize the following audio transcript / conversation into a crisp, high-impact executive brief:
 
-### 📋 Executive Takeaway
+### Executive Takeaway
 (2 sentences maximum)
 
-### 💡 Strategic Highlights & Key Decisions
+### Strategic Highlights & Key Decisions
 - (3-4 bullet points)
 
-### ✅ Action Items & Follow-ups
+### Action Items & Follow-ups
 - [ ] (Clear actionable tasks with owners if identified)
 """
 

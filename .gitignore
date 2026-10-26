@@ -13,3 +13,4 @@ BeeBar/BeeBar.app/
 *.token
 config.json
 credentials.json
+*.zip

@@ -322,18 +322,18 @@ public actor BeeSyncEngine {
         source: bee.computer
         ---
 
-        # 💬 \(title)
+        # \(title)
 
         - **ID:** `\(id)`
         - **Utterances:** \(utterances.count)
 
-        ## 📋 Executive Summary
+        ## Executive Summary
         \(summary)
 
         """
 
         if !utterances.isEmpty {
-            md += "\n## 🎙️ Audio Transcript\n\n"
+            md += "\n## Audio Transcript\n\n"
             for u in utterances {
                 let speaker = (u["speaker"] as? String) ?? "Speaker"
                 let text = (u["text"] as? String) ?? ""
@@ -379,7 +379,7 @@ public actor BeeSyncEngine {
         type: transcript
         ---
 
-        # 🎙️ Transcript: \(title)
+        # Transcript: \(title)
 
         """
 
