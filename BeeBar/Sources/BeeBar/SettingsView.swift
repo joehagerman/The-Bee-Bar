@@ -205,6 +205,9 @@ struct SettingsView: View {
                     .foregroundColor(.secondary)
             }
 
+            // Token Retrieval Helper Box
+            tokenRetrievalGuideCard
+
             // Test Connection Button & Status
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -238,6 +241,57 @@ struct SettingsView: View {
             // Step-by-Step Proxy Setup Guide
             proxyStepByStepGuideCard
         }
+    }
+
+    // MARK: - Token Retrieval Guide Card
+
+    private var tokenRetrievalGuideCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "key.fill")
+                    .foregroundColor(Color.amber)
+                Text("Method 2: Extract Token Stored on Your Mac (Instant)")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                Spacer()
+            }
+
+            Text("Because you already completed `bee login --qr` in Terminal, your Mac has already saved your authenticated token in the secure macOS Keychain.")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Option A: Via Terminal")
+                    .font(.caption2)
+                    .fontWeight(.medium)
+
+                Text("Run this command in Terminal:")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+
+                HStack {
+                    Text("security find-generic-password -s \"bee-cli\" -a \"token:prod\" -w")
+                        .font(.system(.caption2, design: .monospaced))
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color(NSColor.textBackgroundColor))
+                        .cornerRadius(4)
+                    Spacer()
+                    copyButton(for: "security find-generic-password -s \"bee-cli\" -a \"token:prod\" -w")
+                }
+
+                Text("(macOS will display a system prompt asking you to enter your Mac user password to allow Keychain access, then print your full token). Copy and paste it into the Bearer Token field above.")
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(10)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.6))
+        .cornerRadius(8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color.secondary.opacity(0.2), lineWidth: 1)
+        )
     }
 
     // MARK: - Proxy Setup Guide Card

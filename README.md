@@ -105,7 +105,12 @@ Hovering over any conversation item in the menu displays a floating, non-activat
 5. Click **Verify Connection (GET /v1/me)** to confirm pairing, then click **Save Settings**.
 
 #### Option B: Public Cloud API Mode
-1. In your Bee mobile app, open **Settings** &rarr; tap the version number 5 times to enable **Developer Mode** &rarr; copy your Bearer token.
+1. **Extract your token from macOS Keychain** (since you already completed `bee login --qr`):
+   ```bash
+   security find-generic-password -s "bee-cli" -a "token:prod" -w
+   ```
+   *(macOS will prompt for your Mac password to grant Keychain access, then print your full token).*
+   *Alternatively, in your Bee mobile app: Settings &rarr; tap version 5 times &rarr; Developer Mode &rarr; copy Bearer token.*
 2. In The Bee Bar Preferences, select **Public Cloud API**.
 3. Paste your token into the **Bearer Token** field.
 4. Click **Verify Connection (GET /v1/me)** and click **Save Settings**.
