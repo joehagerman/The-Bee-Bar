@@ -55,7 +55,7 @@ ${updatedStr ? `updated: "${updatedStr}"\n` : ''}${durationStr ? `duration: "${d
 source: bee.computer
 ---
 
-# 💬 ${title}
+#  ${title}
 
 - **Date:** ${dateStr}
 ${durationStr ? `- **Duration:** ${durationStr}\n` : ''}- **ID:** \`${conv.id || 'N/A'}\`
@@ -72,7 +72,7 @@ ${conv.primary_location && conv.primary_location.address ? `- **Location:** ${co
   // Key Highlights / Takeaways
   const keyPoints = conv.key_points || conv.takeaways || conv.highlights || conv.insights;
   if (Array.isArray(keyPoints) && keyPoints.length > 0) {
-    md += `## 💡 Key Highlights & Insights\n\n`;
+    md += `##  Key Highlights & Insights\n\n`;
     for (const point of keyPoints) {
       if (typeof point === 'string') {
         md += `- ${point}\n`;
@@ -86,7 +86,7 @@ ${conv.primary_location && conv.primary_location.address ? `- **Location:** ${co
   // Action Items / Todos
   const actionItems = conv.action_items || conv.todos || (conv.conversation_summary && conv.conversation_summary.todos);
   if (Array.isArray(actionItems) && actionItems.length > 0) {
-    md += `## ✅ Action Items & Tasks\n\n`;
+    md += `## [Done] Action Items & Tasks\n\n`;
     for (const item of actionItems) {
       const text = typeof item === 'string' ? item : (item.text || item.title || JSON.stringify(item));
       const done = item.completed ? '[x]' : '[ ]';
@@ -98,18 +98,18 @@ ${conv.primary_location && conv.primary_location.address ? `- **Location:** ${co
   // Topics
   const topics = conv.topics || conv.tags;
   if (Array.isArray(topics) && topics.length > 0) {
-    md += `## 🏷️ Topics\n\n`;
+    md += `## ️ Topics\n\n`;
     md += topics.map(t => `\`${typeof t === 'string' ? t : t.name || t.label}\``).join(' ') + '\n\n';
   }
 
   // Utterance Transcript
-  md += `## 🎙️ Transcript\n\n`;
+  md += `## ️ Transcript\n\n`;
   const utterances = getUtterances(conv);
   
   if (Array.isArray(utterances) && utterances.length > 0) {
     for (const u of utterances) {
       const speaker = u.speaker || u.role || u.speaker_name || 'Speaker';
-      const speakerIcon = speaker.toLowerCase().includes('you') || speaker.toLowerCase().includes('user') ? '👤' : (speaker.toLowerCase().includes('bee') ? '🐝' : '🗣️');
+      const speakerIcon = speaker.toLowerCase().includes('you') || speaker.toLowerCase().includes('user') ? '' : (speaker.toLowerCase().includes('bee') ? '' : '️');
       const time = u.spoken_at ? formatDate(u.spoken_at) : (u.timestamp ? formatDate(u.timestamp) : (u.start !== undefined ? `${u.start}s` : ''));
       const text = u.text || u.content || u.utterance || '';
       
@@ -140,7 +140,7 @@ type: daily-summary
 source: bee.computer
 ---
 
-# 🌅 ${title}
+#  ${title}
 
 - **Date:** ${dateStr}
 - **ID:** \`${daily.id || 'N/A'}\`
@@ -155,22 +155,22 @@ source: bee.computer
 
   // Morning / Evening Brief
   if (daily.morning_brief) {
-    md += `### ☕ Morning Brief\n\n${daily.morning_brief}\n\n`;
+    md += `###  Morning Brief\n\n${daily.morning_brief}\n\n`;
   }
   if (daily.evening_brief || daily.evening_recap) {
-    md += `### 🌙 Evening Recap\n\n${daily.evening_brief || daily.evening_recap}\n\n`;
+    md += `###  Evening Recap\n\n${daily.evening_brief || daily.evening_recap}\n\n`;
   }
   if (daily.calendar_summary) {
-    md += `### 📅 Calendar Summary\n\n${daily.calendar_summary}\n\n`;
+    md += `###  Calendar Summary\n\n${daily.calendar_summary}\n\n`;
   }
   if (daily.email_summary) {
-    md += `### ✉️ Email Summary\n\n${daily.email_summary}\n\n`;
+    md += `### ️ Email Summary\n\n${daily.email_summary}\n\n`;
   }
 
   // Highlights
   const highlights = daily.highlights || daily.key_events || daily.takeaways;
   if (Array.isArray(highlights) && highlights.length > 0) {
-    md += `## 🌟 Key Highlights\n\n`;
+    md += `##  Key Highlights\n\n`;
     for (const h of highlights) {
       const text = typeof h === 'string' ? h : (h.text || JSON.stringify(h));
       md += `- ${text}\n`;
@@ -180,7 +180,7 @@ source: bee.computer
 
   // Action Items / Completed Todos
   if (Array.isArray(daily.todos) && daily.todos.length > 0) {
-    md += `## ✅ Daily Tasks & Action Items\n\n`;
+    md += `## [Done] Daily Tasks & Action Items\n\n`;
     for (const t of daily.todos) {
       const text = typeof t === 'string' ? t : (t.text || JSON.stringify(t));
       const done = t.completed ? '[x]' : '[ ]';
@@ -191,7 +191,7 @@ source: bee.computer
 
   // Associated Conversations
   if (Array.isArray(daily.conversations) && daily.conversations.length > 0) {
-    md += `## 💬 Conversations from this Day\n\n`;
+    md += `##  Conversations from this Day\n\n`;
     for (const c of daily.conversations) {
       const cTitle = c.short_summary || c.title || c.name || `Conversation ${c.id}`;
       md += `- **${cTitle}** (\`${c.id || ''}\`)\n`;
@@ -218,7 +218,7 @@ type: journal
 source: bee.computer
 ---
 
-# 📖 ${title}
+#  ${title}
 
 - **Date:** ${dateStr}
 - **ID:** \`${journal.id || 'N/A'}\`
@@ -227,11 +227,11 @@ source: bee.computer
 
   const content = journal.text || journal.content || journal.entry;
   if (content) {
-    md += `## ✍️ Journal Content\n\n${content}\n\n`;
+    md += `## ️ Journal Content\n\n${content}\n\n`;
   }
 
   if (Array.isArray(journal.reflections) && journal.reflections.length > 0) {
-    md += `## 💭 Reflections\n\n`;
+    md += `##  Reflections\n\n`;
     for (const r of journal.reflections) {
       md += `- ${typeof r === 'string' ? r : r.text}\n`;
     }
@@ -243,24 +243,24 @@ source: bee.computer
 
 function formatTodosMarkdown(rawTodos) {
   const todos = Array.isArray(rawTodos) ? rawTodos : (rawTodos.todos || []);
-  let md = `# ✅ Bee.computer Action Items & Todos\n\n`;
+  let md = `# [Done] Bee.computer Action Items & Todos\n\n`;
   md += `*Exported on ${new Date().toLocaleString()}*\n\n`;
 
   const pending = todos.filter(t => !t.completed);
   const completed = todos.filter(t => t.completed);
 
-  md += `## ⏳ Pending Tasks (${pending.length})\n\n`;
+  md += `## [Pending] Pending Tasks (${pending.length})\n\n`;
   if (pending.length === 0) {
     md += `*No pending tasks!*\n\n`;
   } else {
     for (const t of pending) {
-      const alarm = t.alarm_at ? ` ⏰ *(Alarm: ${formatDate(t.alarm_at)})*` : '';
+      const alarm = t.alarm_at ? `  *(Alarm: ${formatDate(t.alarm_at)})*` : '';
       md += `- [ ] **${t.text || 'Untitled Task'}**${alarm} \`[${t.id || ''}]\`\n`;
     }
     md += `\n`;
   }
 
-  md += `## ✔️ Completed Tasks (${completed.length})\n\n`;
+  md += `## [Done]️ Completed Tasks (${completed.length})\n\n`;
   if (completed.length === 0) {
     md += `*No completed tasks.*\n\n`;
   } else {
@@ -275,7 +275,7 @@ function formatTodosMarkdown(rawTodos) {
 
 function formatFactsMarkdown(rawFacts) {
   const facts = Array.isArray(rawFacts) ? rawFacts : (rawFacts.facts || []);
-  let md = `# 💡 Bee.computer Facts & Memory Bank\n\n`;
+  let md = `#  Bee.computer Facts & Memory Bank\n\n`;
   md += `*Exported on ${new Date().toLocaleString()}*\n\n`;
 
   if (!Array.isArray(facts) || facts.length === 0) {
@@ -284,7 +284,7 @@ function formatFactsMarkdown(rawFacts) {
   }
 
   for (const f of facts) {
-    const status = f.confirmed ? '✅ Confirmed' : '❔ Unconfirmed';
+    const status = f.confirmed ? '[Done] Confirmed' : '[?] Unconfirmed';
     const date = f.created_at ? ` - *(${formatDate(f.created_at)})*` : '';
     const tags = Array.isArray(f.tags) && f.tags.length ? ` \`[${f.tags.join(', ')}]\`` : '';
     md += `- **${f.text || 'Untitled Fact'}** (${status})${tags}${date} \`[${f.id || ''}]\`\n`;
@@ -295,7 +295,7 @@ function formatFactsMarkdown(rawFacts) {
 
 function formatInsightsMarkdown(rawInsights) {
   const insights = Array.isArray(rawInsights) ? rawInsights : (rawInsights.insights || []);
-  let md = `# 🧠 Bee.computer Insights & Behavioral Patterns\n\n`;
+  let md = `#  Bee.computer Insights & Behavioral Patterns\n\n`;
   md += `*Exported on ${new Date().toLocaleString()}*\n\n`;
 
   if (!Array.isArray(insights) || insights.length === 0) {
@@ -304,7 +304,7 @@ function formatInsightsMarkdown(rawInsights) {
   }
 
   for (const ins of insights) {
-    md += `### 💡 ${ins.title || 'Insight'}\n\n`;
+    md += `###  ${ins.title || 'Insight'}\n\n`;
     if (ins.description) {
       md += `${ins.description}\n\n`;
     }
@@ -374,7 +374,7 @@ source: bee.computer
 utterances_count: ${utterances.length}
 ---
 
-# 🎙️ Verbatim Transcript: ${title}
+# ️ Verbatim Transcript: ${title}
 
 - **Date:** ${dateStr}
 - **Duration:** ${durationStr}
@@ -395,7 +395,7 @@ ${conv.primary_location && conv.primary_location.address ? `- **Location:** ${co
     const speaker = u.speaker || 'Unknown';
     const isUser = speaker.toLowerCase().includes('you') || speaker.toLowerCase().includes('user');
     const isBee = speaker.toLowerCase().includes('bee');
-    const icon = isUser ? '👤' : (isBee ? '🐝' : '🗣️');
+    const icon = isUser ? '' : (isBee ? '' : '️');
     
     let time = '';
     if (u.spoken_at) {

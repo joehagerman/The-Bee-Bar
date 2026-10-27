@@ -527,8 +527,8 @@ function createItemCard(c, viewType) {
   const dateStr = formatDate(c.created_at);
   const duration = formatDuration(c.duration_ms);
   const turns = c.utteranceCount ? `${c.utteranceCount} turns` : '';
-  const icon = viewType === 'transcripts' ? '🎙️' : '💬';
-  const tagsHtml = (c.tags || []).slice(0, 2).map(t => `<span class="badge-tag">🏷️ ${escapeHtml(t)}</span>`).join('');
+  const icon = viewType === 'transcripts' ? '️' : '';
+  const tagsHtml = (c.tags || []).slice(0, 2).map(t => `<span class="badge-tag">️ ${escapeHtml(t)}</span>`).join('');
 
   card.innerHTML = `
     <div class="card-top">
@@ -537,7 +537,7 @@ function createItemCard(c, viewType) {
     </div>
     <div class="item-snippet">${escapeHtml(c.summarySnippet || (viewType === 'transcripts' ? 'Verbatim audio transcript' : 'No summary text available.'))}</div>
     <div class="card-badges">
-      ${duration ? `<span class="badge-tag">⏱️ ${duration}</span>` : ''}
+      ${duration ? `<span class="badge-tag">️ ${duration}</span>` : ''}
       ${turns ? `<span class="badge-tag">${turns}</span>` : ''}
       ${tagsHtml}
     </div>
@@ -566,7 +566,7 @@ function renderInsightsList(query = '') {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-top">
-        <span class="item-title">🧠 ${escapeHtml(ins.title || 'Insight')}</span>
+        <span class="item-title"> ${escapeHtml(ins.title || 'Insight')}</span>
       </div>
       <div class="item-snippet">${escapeHtml(ins.description || '')}</div>
       <div class="card-badges">
@@ -627,7 +627,7 @@ function renderDailyList(query = '') {
 
     card.innerHTML = `
       <div class="card-top">
-        <span class="item-title">🌅 ${escapeHtml(d.title)}</span>
+        <span class="item-title"> ${escapeHtml(d.title)}</span>
         <span class="item-date">${escapeHtml(d.date || '')}</span>
       </div>
       <div class="item-snippet">${escapeHtml(d.summarySnippet || 'Executive briefing for the day.')}</div>
@@ -662,7 +662,7 @@ function renderJournalsList(query = '') {
 
     card.innerHTML = `
       <div class="card-top">
-        <span class="item-title">📖 ${escapeHtml(j.title)}</span>
+        <span class="item-title"> ${escapeHtml(j.title)}</span>
         <span class="item-date">${escapeHtml(formatDate(j.date))}</span>
       </div>
       <div class="item-snippet">${escapeHtml(j.summarySnippet || 'Personal reflections and journal insights.')}</div>
@@ -691,12 +691,12 @@ function renderTodosList(query = '') {
     card.className = 'item-card';
 
     const done = t.completed;
-    const alarm = t.alarm_at ? `⏰ ${formatDate(t.alarm_at)}` : '';
+    const alarm = t.alarm_at ? ` ${formatDate(t.alarm_at)}` : '';
 
     card.innerHTML = `
       <div class="card-top">
         <span class="item-title" style="${done ? 'text-decoration: line-through; opacity: 0.6;' : ''}">
-          ${done ? '✅' : '⏳'} ${escapeHtml(t.text || 'Untitled Task')}
+          ${done ? '[Done]' : '[Pending]'} ${escapeHtml(t.text || 'Untitled Task')}
         </span>
       </div>
       <div class="card-badges">
@@ -731,7 +731,7 @@ function renderFactsList(query = '') {
     card.className = 'item-card';
     card.innerHTML = `
       <div class="card-top">
-        <span class="item-title">💡 ${escapeHtml(f.text || 'Fact')}</span>
+        <span class="item-title"> ${escapeHtml(f.text || 'Fact')}</span>
       </div>
       <div class="card-badges">
         <span class="badge-tag">${f.confirmed ? 'Confirmed' : 'Unconfirmed'}</span>
@@ -747,7 +747,7 @@ function renderFactsList(query = '') {
 function renderEmptyState(heading, subtext) {
   el.itemsList.innerHTML = `
     <div class="empty-state">
-      <div class="empty-icon">🐝</div>
+      <div class="empty-icon"></div>
       <h3>${escapeHtml(heading)}</h3>
       <p>${escapeHtml(subtext)}</p>
       <div class="empty-actions">
@@ -801,13 +801,13 @@ async function selectItem(type, id) {
       el.detailKeywordsRow.style.display = 'flex';
       let badges = '';
       for (const tag of (metaConv.tags || [])) {
-        badges += `<span class="keyword-tag" title="Filter by ${escapeHtml(tag)}" onclick="window.filterByTopic('${escapeHtml(tag)}')">🏷️ ${escapeHtml(tag)}</span>`;
+        badges += `<span class="keyword-tag" title="Filter by ${escapeHtml(tag)}" onclick="window.filterByTopic('${escapeHtml(tag)}')">️ ${escapeHtml(tag)}</span>`;
       }
       for (const kw of (metaConv.keywords || []).slice(0, 5)) {
         badges += `<span class="keyword-tag" title="Search for ${escapeHtml(kw)}" onclick="window.searchKeyword('${escapeHtml(kw)}')">#${escapeHtml(kw)}</span>`;
       }
       if (metaConv.location) {
-        badges += `<span class="keyword-tag location-tag" title="${escapeHtml(metaConv.location)}">📍 ${escapeHtml(metaConv.location.split(',')[0])}</span>`;
+        badges += `<span class="keyword-tag location-tag" title="${escapeHtml(metaConv.location)}"> ${escapeHtml(metaConv.location.split(',')[0])}</span>`;
       }
       el.detailKeywordsRow.innerHTML = badges;
     } else {
@@ -912,7 +912,7 @@ async function selectItem(type, id) {
       return `
         <div class="utterance-row ${isBee ? 'is-bee' : ''}">
           <div class="utterance-avatar ${isBee ? 'bee' : ''}">
-            ${isBee ? '🐝' : '👤'}
+            ${isBee ? '' : ''}
           </div>
           <div class="utterance-body">
             <div class="utterance-meta">
@@ -1003,7 +1003,7 @@ function showFactsDetail() {
 
   const facts = state.localData.facts || [];
   el.detailHighlightsList.innerHTML = facts.map(f => {
-    const status = f.confirmed ? '✅ Confirmed' : '❔ Pending confirmation';
+    const status = f.confirmed ? '[Done] Confirmed' : '[?] Pending confirmation';
     return `<li><strong>${escapeHtml(f.text)}</strong> <span style="font-size: 11px; color: var(--text-dim);">(${status})</span></li>`;
   }).join('');
 
@@ -1342,11 +1342,11 @@ function setupEventListeners() {
     if (res.success) {
       el.connResultAlert.className = 'alert-box alert-success';
       const u = res.data;
-      el.connResultAlert.innerHTML = `✅ Successfully connected to Bee! Logged in as: <strong>${escapeHtml(u.name || u.email || u.id || 'Bee Developer')}</strong>`;
+      el.connResultAlert.innerHTML = `[Done] Successfully connected to Bee! Logged in as: <strong>${escapeHtml(u.name || u.email || u.id || 'Bee Developer')}</strong>`;
       checkStatusIndicator();
     } else {
       el.connResultAlert.className = 'alert-box alert-error';
-      el.connResultAlert.innerHTML = `❌ Connection failed: ${escapeHtml(res.message || 'Check your token or proxy')}`;
+      el.connResultAlert.innerHTML = `[Failed] Connection failed: ${escapeHtml(res.message || 'Check your token or proxy')}`;
     }
   });
 

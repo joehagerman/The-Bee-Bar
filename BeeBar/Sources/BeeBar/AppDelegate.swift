@@ -425,7 +425,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
 
         // Strip verbatim transcript section if attached
-        for marker in ["## 🎙️ Audio Transcript", "## 🎙️ Transcript", "## Audio Transcript", "## Transcript"] {
+        for marker in ["## \u{1F399}\u{FE0F} Audio Transcript", "## \u{1F399}\u{FE0F} Transcript", "## Audio Transcript", "## Transcript"] {
             if let range = text.range(of: marker) {
                 text = String(text[..<range.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
             }
@@ -436,7 +436,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
             "## Summary\n", "## Summary\r\n",
             "# Summary\n", "# Summary\r\n",
             "### Summary\n", "### Summary\r\n",
-            "## 📋 Executive Summary\n", "## 📋 Executive Summary\r\n"
+            "## \u{1F4CB} Executive Summary\n", "## \u{1F4CB} Executive Summary\r\n"
         ]
 
         for heading in summaryHeadings {

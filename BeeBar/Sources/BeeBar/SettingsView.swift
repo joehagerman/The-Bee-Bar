@@ -747,7 +747,7 @@ struct SettingsView: View {
             let res = await engine.testConnection()
             await MainActor.run {
                 self.isTesting = false
-                self.testResultText = res.success ? "✅ \(res.message)" : "❌ \(res.message)"
+                self.testResultText = res.success ? "Success: \(res.message)" : "Failed: \(res.message)"
             }
         }
     }

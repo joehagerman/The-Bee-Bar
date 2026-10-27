@@ -12,7 +12,7 @@
     <header class="window-titlebar">
       <div class="titlebar-drag-region">
         <div class="app-branding">
-          <span class="bee-logo">🐝</span>
+          <span class="bee-logo"></span>
           <span class="app-name">The Bee Bar</span>
           <span class="dev-badge">Developer Mode</span>
         </div>
@@ -144,7 +144,7 @@
           <div class="items-list" id="itemsList">
             <!-- Dynamic Item Cards -->
             <div class="empty-state">
-              <div class="empty-icon">🐝</div>
+              <div class="empty-icon"></div>
               <h3>No Bee Data Loaded</h3>
               <p>Connect your account with your Bee token or start with sample developer data.</p>
               <div class="empty-actions">
@@ -159,7 +159,7 @@
         <section class="detail-pane" id="detailPane">
           <div class="detail-placeholder" id="detailPlaceholder">
             <div class="placeholder-content">
-              <span class="placeholder-icon">📋</span>
+              <span class="placeholder-icon"></span>
               <h3>Select a Conversation or Summary</h3>
               <p>Choose an item from the left pane to view its executive summary, key insights, action items, and full audio transcript.</p>
             </div>
@@ -221,7 +221,7 @@
                 <!-- Executive Summary Box -->
                 <div class="content-card executive-summary-card" id="cardExecutiveSummary">
                   <div class="card-header">
-                    <span class="card-icon">📋</span>
+                    <span class="card-icon"></span>
                     <h3>Executive Summary</h3>
                   </div>
                   <div class="card-body" id="detailExecutiveSummary">
@@ -232,7 +232,7 @@
                 <!-- Key Highlights & Insights -->
                 <div class="content-card highlights-card" id="cardHighlights" style="display: none;">
                   <div class="card-header">
-                    <span class="card-icon">💡</span>
+                    <span class="card-icon"></span>
                     <h3>Key Insights & Highlights</h3>
                   </div>
                   <ul class="highlights-list" id="detailHighlightsList"></ul>
@@ -241,7 +241,7 @@
                 <!-- Action Items -->
                 <div class="content-card tasks-card" id="cardTasks" style="display: none;">
                   <div class="card-header">
-                    <span class="card-icon">✅</span>
+                    <span class="card-icon">[Done]</span>
                     <h3>Action Items & Follow-ups</h3>
                   </div>
                   <ul class="tasks-checklist" id="detailTasksList"></ul>
@@ -251,7 +251,7 @@
                 <div class="content-card transcript-card" id="cardTranscript">
                   <div class="card-header transcript-header">
                     <div class="header-left">
-                      <span class="card-icon">🎙️</span>
+                      <span class="card-icon">️</span>
                       <h3>Full Audio Transcript</h3>
                     </div>
                     <span class="utterance-badge" id="detailUtteranceCount">0 turns</span>
@@ -264,7 +264,7 @@
                 <!-- Related Conversations Grouped by Topic -->
                 <div class="content-card related-convs-card" id="cardRelatedConvs" style="display: none;">
                   <div class="card-header">
-                    <span class="card-icon">🔗</span>
+                    <span class="card-icon"></span>
                     <h3>Related Conversations on this Topic</h3>
                   </div>
                   <div class="related-convs-list" id="detailRelatedConvsList">
@@ -299,11 +299,11 @@
             </div>
 
             <div class="settings-card">
-              <h3>🔑 Bee Authentication</h3>
+              <h3> Bee Authentication</h3>
               <p class="settings-desc">Authenticate using your Bee Developer Bearer Token or point to your running local proxy.</p>
               
               <div class="auth-help-banner">
-                <div class="help-title">💡 How to sign into your Bee Developer account:</div>
+                <div class="help-title"> How to sign into your Bee Developer account:</div>
                 <ul class="help-steps">
                   <li><strong>Method 1 (Instant Bearer Token):</strong> In the Bee mobile app where you signed in, go to <em>Settings</em> &rarr; tap the version number 5 times to reveal <em>Developer Mode</em> &rarr; tap <em>API Access / Token</em> to copy your Bearer Token, and paste it below.</li>
                   <li><strong>Method 2 (QR Code Login via CLI):</strong> Run <code>bee login --qr</code> in your terminal and scan the QR code with your Bee app. Then run <code>bee proxy</code> to connect locally on port 8787 without needing to copy tokens!</li>
@@ -357,7 +357,7 @@
             </div>
 
             <div class="settings-card">
-              <h3>👁️ Sidebar Folders &amp; Visibility</h3>
+              <h3>️ Sidebar Folders &amp; Visibility</h3>
               <p class="settings-desc">Customize which folders and categories appear in the left sidebar navigation.</p>
               
               <div class="visibility-toggles-grid">
@@ -414,7 +414,7 @@
             </div>
 
             <div class="settings-card">
-              <h3>📂 Local Storage &amp; Backup Location</h3>
+              <h3> Local Storage &amp; Backup Location</h3>
               <p class="settings-desc">All downloaded transcripts, executive summaries, journals, and raw JSON payloads are written here.</p>
 
               <div class="form-group">
@@ -446,7 +446,7 @@
         <section class="search-view-pane" id="searchViewPane" style="display: none;">
           <div class="search-page-container">
             <div class="search-header">
-              <h2>🔍 Search Transcripts & Summaries</h2>
+              <h2> Search Transcripts & Summaries</h2>
               <p>Instant full-text search across all downloaded conversations, executive summaries, journals, and action items.</p>
               <div class="big-search-box">
                 <svg class="icon big-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -455,15 +455,15 @@
               <div class="search-options-bar">
                 <label class="radio-label search-mode-opt">
                   <input type="radio" name="searchEngine" value="local" checked>
-                  <span>⚡ Local Instant Search</span>
+                  <span> Local Instant Search</span>
                 </label>
                 <label class="radio-label search-mode-opt">
                   <input type="radio" name="searchEngine" value="bm25">
-                  <span>☁️ Cloud BM25 Keyword</span>
+                  <span>️ Cloud BM25 Keyword</span>
                 </label>
                 <label class="radio-label search-mode-opt">
                   <input type="radio" name="searchEngine" value="neural">
-                  <span>🧠 Neural Semantic Vector Search</span>
+                  <span> Neural Semantic Vector Search</span>
                 </label>
               </div>
             </div>
@@ -479,7 +479,7 @@
         <section class="files-view-pane" id="filesViewPane" style="display: none;">
           <div class="files-page-container">
             <div class="files-header">
-              <h2>📁 Exported Files & Folder Structure</h2>
+              <h2> Exported Files & Folder Structure</h2>
               <p>Your Bee data is stored in open, human-readable formats: clean GitHub-style Markdown (<code>.md</code>) and raw JSON (<code>.json</code>).</p>
             </div>
 
@@ -503,7 +503,7 @@
             </div>
 
             <div class="folder-structure-card">
-              <h3>📂 Directory Organization</h3>
+              <h3> Directory Organization</h3>
               <pre class="folder-tree"><code><span class="folder">Bee Exports/</span>
   ├── <span class="folder">conversations/</span>     <span class="comment"># .md with Executive Summaries & dialogue turns, plus raw .json</span>
   ├── <span class="folder">daily/</span>             <span class="comment"># Daily briefing recaps & executive summaries</span>
@@ -533,7 +533,7 @@
       <div class="modal-card">
         <div class="modal-header">
           <div class="modal-title-row">
-            <span class="bee-spinner">🐝</span>
+            <span class="bee-spinner"></span>
             <h3>Syncing Bee.computer Data</h3>
           </div>
         </div>
