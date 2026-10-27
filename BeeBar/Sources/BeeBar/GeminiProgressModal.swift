@@ -257,9 +257,15 @@ public final class GeminiProgressModal: NSObject {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(responseText, forType: .string)
 
-                    // 2. Save full response to exports folder as Markdown backup
+                    // 2. Save full response to exports folder as Markdown backup with historical timestamp
                     let outPath = conv.geminiBriefPath(storageDir: storageDir)
                     try? responseText.write(toFile: outPath, atomically: true, encoding: .utf8)
+                    if let fileDate = conv.createdDate {
+                        try? FileManager.default.setAttributes([
+                            .creationDate: fileDate,
+                            .modificationDate: fileDate
+                        ], ofItemAtPath: outPath)
+                    }
 
                     self.appendTerminalLog("[CLIPBOARD] Copied full response (\(responseText.count) chars) to macOS clipboard.")
                     self.appendTerminalLog("[STORAGE] Saved Markdown dossier to: \(outPath)")

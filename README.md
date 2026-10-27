@@ -10,11 +10,12 @@
 
 <p align="center">
   <a href="https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip">
-    <img src="https://img.shields.io/badge/Download-The_Bee_Bar_v1.0.0_(macOS)-blue?style=for-the-badge&logo=apple" alt="Download The Bee Bar">
+    <img src="https://img.shields.io/badge/Download-The_Bee_Bar_v1.1.0_(macOS)-blue?style=for-the-badge&logo=apple" alt="Download The Bee Bar">
   </a>
 </p>
 
 <p align="center">
+  <img src="https://img.shields.io/badge/Version-1.1.0-blue?style=flat-square" alt="Version 1.1.0">
   <img src="https://img.shields.io/badge/Platform-macOS_13.0+-lightgrey?style=flat-square" alt="Platform: macOS 13.0+">
   <img src="https://img.shields.io/badge/Architecture-Universal_(Apple_Silicon_%26_Intel)-lightgrey?style=flat-square" alt="Architecture: Universal">
   <img src="https://img.shields.io/badge/Language-Swift_6-orange?style=flat-square" alt="Language: Swift 6">
@@ -33,15 +34,15 @@
 
 **The Bee Bar** is a lightweight, native macOS status bar utility designed for users of the [Bee.computer](https://bee.computer) wearable microphone and assistant.
 
-Running quietly in the macOS menu bar (`LSUIElement`), The Bee Bar synchronizes audio recordings, conversational transcripts, executive summaries, journals, action items, and memory facts into clean local Markdown (`.md`) and raw JSON (`.json`) files. It also integrates directly with the Google Gemini API to generate customized, high-impact executive summaries on demand.
+Running quietly in the macOS menu bar (`LSUIElement`), The Bee Bar synchronizes audio recordings, conversational transcripts, executive summaries, journals, action items, and memory facts into clean local Markdown (`.md`) and raw JSON (`.json`) files. It also integrates directly with the Google Gemini API to generate customized, high-impact executive summaries with a real-time streaming telemetry terminal.
 
 ---
 
 ## Direct Download
 
-| Version | Target Platform | Archive |
+| Version | Target Platform | Release Archive |
 |:---|:---|:---|
-| **v1.0.0** | macOS 13.0 or later (Apple Silicon & Intel) | [**Download The-Bee-Bar-macOS.zip**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip) |
+| **v1.1.0** | macOS 13.0 or later (Apple Silicon & Intel) | [**Download The-Bee-Bar-macOS.zip**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip) |
 
 All official releases and change notes are available on the [GitHub Releases Page](https://github.com/joehagerman/The-Bee-Bar/releases).
 
@@ -49,31 +50,43 @@ All official releases and change notes are available on the [GitHub Releases Pag
 
 ## Key Capabilities
 
-### 1. Continuous Background Synchronization
+### 1. Chronological Filesystem Alignment
+- Automatically updates both the macOS file creation date (`NSFileCreationDate`) and modification date (`NSFileModificationDate`) on every downloaded Markdown document, verbatim transcript, and JSON payload to match the exact historical date and time the conversation occurred.
+- Ensures macOS Finder, Spotlight, Obsidian, Logseq, and Notion view and sort all files in chronological order rather than clustering them at the time of synchronization.
+
+### 2. Interactive Terminal Console HUD
+- When invoking Gemini AI summarization, The Bee Bar presents a developer terminal console displaying real-time streaming telemetry:
+  - Target conversation ID, duration, and utterance turn count.
+  - Transcript payload size and system prompt injection.
+  - Network request details (HTTP POST endpoint, TLS 1.3 handshake, byte transfer).
+  - Inference reception, token output verification, and clipboard copy confirmation.
+- **Dual Tab Switching**: Seamlessly toggle between the live **Terminal Log** and the formatted **Summary Preview** tab.
+- **Auto-Dismiss Controls**: Pause the 5-second countdown timer to review summaries without rushing, re-copy with one click, or dismiss when done.
+
+### 3. Comprehensive Executive Dossier Prompting
+- Default prompt structures transcripts into an in-depth intelligence dossier:
+  - **Discussion Overview & Context**: Multi-paragraph narrative synthesizing the core objectives, participant viewpoints, and trajectory.
+  - **In-Depth Discussion & Core Topics**: Substantive breakdown of technical context, nuances, and arguments.
+  - **Key Decisions & Strategic Takeaways**: Explicit decisions reached, underlying rationales, and evaluated alternatives.
+  - **Action Items, Deliverables & Owners**: Checkbox tasks with assignees and timelines.
+  - **Open Questions, Risks & Follow-ups**: Unresolved items, dependencies, and potential blockers.
+- Full prompt customization with a multi-line code editor and instant "Reset to Default" button in Preferences.
+
+### 4. Continuous Background Synchronization & Menu Limits
 - Automatically polls Bee's servers at configurable intervals: 1 minute, 5 minutes, 15 minutes, Daily (24 hours), Weekly, or Manual Only.
-- Updates file timestamps on downloaded Markdown and JSON files to match the exact historical date and time the conversation occurred.
-- Maintains a local index (`metadata.json`) for fast lookup without redundant network requests.
+- Configurable menu bar item limit: choose to display 5, 10, 15, 20, 25, 50, or all available conversations directly from the menu bar or Preferences.
+- Maintains a local index (`metadata.json`) for instant lookup without redundant network overhead.
 
-### 2. Dual Connection Modes
-- **Local Proxy Mode (Recommended)**: Automatically interfaces with `bee proxy` on `http://127.0.0.1:8787`. No API tokens or manual secret management required.
+### 5. Dual Connection Modes & Built-in Token Extraction
+- **Local Proxy Mode (Recommended)**: Automatically interfaces with `bee proxy` on `http://127.0.0.1:8787` with zero credentials needed.
 - **Direct Cloud API Mode**: Connects directly to the Bee developer endpoint (`https://api.developer.bee.amazon.dev`) using Bearer token authentication.
+- **Keychain Token Retrieval**: Preferences includes copyable commands to retrieve your authenticated Bearer token directly from the macOS Keychain.
 
-### 3. One-Click Clipboard Actions
-Every conversation entry in the menu bar dropdown includes an action submenu:
-- **Copy Summary**: Extracts only the clean executive summary section without verbatim audio turns.
+### 6. One-Click Clipboard Actions & Hover Preview
+- **Copy Summary**: Extracts only the clean executive summary section without verbatim audio dialogue.
 - **Copy Transcript**: Copies the complete verbatim dialogue transcript directly to the clipboard.
-- **Copy Gemini Summary**: Sends the transcript to Google Gemini, displays a 3-stage progress modal with a 5-second countdown bar, and copies the full returned response to the clipboard.
-- **Open Markdown (.md)**: Opens the formatted report in your default editor (Obsidian, Mac Notes, VS Code, or Bear).
-- **Open Transcript (.txt)**: Opens the raw verbatim transcript in TextEdit.
-- **Reveal in Finder**: Locates the file in macOS Finder.
-
-### 4. Google Gemini AI Integration
-- **Dynamic Model Selection**: Queries the Google API to list available text models (including `gemini-2.5-flash`, `gemini-3.8-flash`, and `gemini-2.5-pro`).
-- **Customizable Pre-Prompt**: Configure the exact executive instruction prepended to transcripts in Preferences, with an instant "Reset to Default" button.
-- **Full Payload Retention**: Configured with extended token output limits (`maxOutputTokens: 8192`) to prevent thinking tokens from truncating the final summary.
-
-### 5. Hover Summary Inspection
-Hovering over any conversation item in the menu displays a floating, non-activating summary panel on the left side of the screen, allowing you to read full executive briefs without clicking.
+- **Copy Gemini Summary**: Summarizes the transcript with Google Gemini, streams terminal logs, and copies the full analytical brief to the clipboard.
+- **Hover Preview Panel**: Non-activating floating panel displays the full conversation summary on hover without requiring a click.
 
 ---
 
@@ -118,7 +131,7 @@ Hovering over any conversation item in the menu displays a floating, non-activat
 ### Step 3: Configure Google Gemini AI (Optional)
 1. In Preferences, switch to the **Gemini AI** tab.
 2. Enter your Google Gemini API key (obtained from [Google AI Studio](https://aistudio.google.com)).
-3. Click **Fetch Models** to populate available model versions and select your preferred model.
+3. Click **Fetch Models** to populate available model versions and select your preferred model (e.g. `gemini-2.5-flash`, `gemini-3.8-flash`, `gemini-2.5-pro`).
 4. (Optional) Customize the Pre-Prompt instructions to tailor the tone and section headers of your executive summaries.
 5. Click **Save Settings**.
 
@@ -133,10 +146,10 @@ All data is stored locally on your Mac (default path: `~/Documents/Bee Exports`)
   ├── conversations/
   │     ├── conv_<id>.md         Formatted Markdown with summary and speaker dialogue
   │     ├── conv_<id>.json       Full raw JSON payload from Bee API
-  │     └── conv_<id>_gemini.md  Cached Gemini AI executive summaries
+  │     └── conv_<id>_gemini.md  Cached Gemini AI executive summaries (timestamp-aligned)
   ├── transcripts/
-  │     ├── <id>_transcript.txt  Plain-text verbatim audio transcript
-  │     └── <id>_transcript.md  Markdown verbatim audio transcript
+  │     ├── <id>_transcript.txt  Plain-text verbatim audio transcript (timestamp-aligned)
+  │     └── <id>_transcript.md  Markdown verbatim audio transcript (timestamp-aligned)
   ├── daily/
   │     ├── daily_<date>.md      Daily morning/evening recap briefs
   │     └── daily_<date>.json
@@ -167,11 +180,11 @@ The source code for the native macOS application is located in `BeeBar/Sources/B
 | `BeeIcon.swift` | Renders and caches the custom 22x22 template menu bar icon. |
 | `BeeModels.swift` | Strongly-typed Codable structures for Bee conversations, utterances, timestamps, and metadata. |
 | `BeeStore.swift` | Observable state store coordinating background sync timers and local data reloading. |
-| `BeeSyncEngine.swift` | HTTP client handling Bee REST API endpoints, date matching, and file serialization. |
+| `BeeSyncEngine.swift` | HTTP client handling Bee REST API endpoints, chronological date alignment, and file serialization. |
 | `ConfigManager.swift` | Manages reading and atomic non-destructive writing of `~/.bee-desktop/config.json`. |
-| `GeminiService.swift` | Client for Google Gemini generateContent and model list APIs with thinking token resilience. |
-| `GeminiProgressModal.swift` | Floating AppKit HUD modal presenting 3-stage progress and 0-5s auto-dismiss progress bar. |
-| `SettingsView.swift` | SwiftUI preferences panel with tabbed navigation, proxy setup guide, and pre-prompt editor. |
+| `GeminiService.swift` | Client for Google Gemini generateContent with real-time logging callbacks and token limits. |
+| `GeminiProgressModal.swift` | Floating HUD terminal console presenting live streaming telemetry and summary previews. |
+| `SettingsView.swift` | SwiftUI preferences panel with tabbed navigation, proxy guide, Keychain helper, and pre-prompt editor. |
 | `SummaryPreviewPanel.swift` | Non-activating floating panel displaying conversation summaries upon hover. |
 
 ---
