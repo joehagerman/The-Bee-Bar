@@ -50,11 +50,23 @@ cat <<EOF > "$STAGE_APP/Contents/Info.plist"
 </plist>
 EOF
 
-echo "Cleaning extended attributes and signing bundle..."
+echo "Cleaning extended attributes..."
 xattr -c "$STAGE_APP" 2>/dev/null || true
 xattr -rc "$STAGE_APP" 2>/dev/null || true
 
-codesign --force --deep --sign - "$STAGE_APP"
+SIGNING_IDENTITY=$(security find-identity -p codesigning -v | grep "Developer ID Application" | head -n 1 | awk -F '"' '{print $2}')
+if [ -z "$SIGNING_IDENTITY" ]; then
+    SIGNING_IDENTITY=$(security find-identity -p codesigning -v | grep "Apple Development" | head -n 1 | awk -F '"' '{print $2}')
+fi
+
+if [ -n "$SIGNING_IDENTITY" ]; then
+    echo "Signing with Apple Developer Certificate: $SIGNING_IDENTITY"
+    codesign --force --deep --options runtime --entitlements "$DIR/BeeBar.entitlements" --sign "$SIGNING_IDENTITY" "$STAGE_APP"
+else
+    echo "No Apple Developer Certificate found in Keychain. Using ad-hoc signature..."
+    codesign --force --deep --sign - "$STAGE_APP"
+fi
+
 codesign -vvv --deep --strict "$STAGE_APP"
 
 rm -rf "$APP_BUNDLE"
