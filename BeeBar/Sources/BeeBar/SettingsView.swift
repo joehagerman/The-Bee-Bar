@@ -324,14 +324,14 @@ struct SettingsView: View {
                         .font(.subheadline)
                         .fontWeight(.medium)
                     HStack {
-                        Text("npm install -g @bee-computer/cli")
+                        Text("npm install -g @beeai/cli")
                             .font(.system(.caption, design: .monospaced))
                             .padding(.horizontal, 8)
                             .padding(.vertical, 4)
                             .background(Color(NSColor.textBackgroundColor))
                             .cornerRadius(4)
                         Spacer()
-                        copyButton(for: "npm install -g @bee-computer/cli")
+                        copyButton(for: "npm install -g @beeai/cli")
                     }
                 }
 

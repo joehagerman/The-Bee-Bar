@@ -104,13 +104,14 @@ All official release builds and changelogs are available on the [GitHub Releases
 2. Open the disk image (or extract the zip) and drag **The Bee Bar.app** into `/Applications`.
 3. Launch **The Bee Bar** from Applications or Spotlight. A striped bee icon will appear in the top-right macOS menu bar.
 
-#### Opening Unsigned Applications on macOS (Gatekeeper Notice)
-Because The Bee Bar is open-source and distributed directly via GitHub rather than the Mac App Store, macOS attaches a download quarantine flag (`com.apple.quarantine`) and may display:
-> *"The Bee Bar can't be opened because Apple cannot check it for malicious software"* or *"The Bee Bar is damaged and can’t be opened"*.
+#### First-Launch Authorization (macOS Gatekeeper)
+The Bee Bar is digitally signed with an official Apple Developer ID (`Developer ID Application: Joseph Hagerman`). When downloading applications directly from GitHub rather than the Mac App Store, macOS attaches a download quarantine flag (`com.apple.quarantine`) and prompts for confirmation on first launch:
+> *"The Bee Bar" is an app downloaded from the internet. Are you sure you want to open it?*
 
-To authorize the app (only required on first launch):
-- **Option 1 (Right-Click)**: In Finder, open `/Applications`, right-click (or Control-click) **The Bee Bar**, select **Open**, and click **Open** in the confirmation dialog.
-- **Option 2 (Terminal command)**: Run this one-line command to remove the macOS quarantine flag:
+To launch:
+- Click **Open** when prompted by macOS.
+- If Gatekeeper requests authorization on your macOS version: in Finder, open `/Applications`, right-click (or Control-click) **The Bee Bar**, select **Open**, and click **Open** (or in **System Settings &rarr; Privacy & Security**, click **Open Anyway**).
+- Alternatively, run this terminal command to clear the quarantine flag:
   ```bash
   xattr -cr "/Applications/The Bee Bar.app"
   ```
@@ -120,7 +121,7 @@ To authorize the app (only required on first launch):
 #### Option A: Local Proxy Mode (Recommended)
 1. Install the Bee CLI if not already present on your Mac:
    ```bash
-   npm install -g @bee-computer/cli
+   npm install -g @beeai/cli
    ```
 2. Log in using the terminal QR code:
    ```bash
