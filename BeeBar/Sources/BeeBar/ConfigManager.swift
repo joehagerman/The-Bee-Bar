@@ -17,16 +17,28 @@ public struct BeeConfig: Codable, Sendable {
     public static let defaultGeminiModel = "gemini-2.5-flash"
     public static let defaultMaxItemsToShow = 15
     public static let defaultGeminiPrompt = """
-You are an elite executive intelligence assistant. Summarize the following audio transcript / conversation into a crisp, high-impact executive brief:
+You are an elite executive intelligence assistant. Analyze and summarize the following conversation transcript into a comprehensive, highly descriptive executive intelligence report:
 
-### Executive Takeaway
-(2 sentences maximum)
+### Discussion Overview & Context
+Provide a thorough, multi-paragraph synthesis of the discussion. Detail the overarching objective, the background context, key participants and perspectives, and the core narrative trajectory of the conversation.
 
-### Strategic Highlights & Key Decisions
-- (3-4 bullet points)
+### In-Depth Discussion & Core Topics
+Break down each major topic discussed in descriptive detail:
+- Specific topics explored, technical or operational challenges raised, and context provided.
+- Key arguments, perspectives, insights, and nuances contributed by different speakers.
+- Relevant data points, milestones, metrics, or requirements mentioned.
 
-### Action Items & Follow-ups
-- [ ] (Clear actionable tasks with owners if identified)
+### Key Decisions & Strategic Takeaways
+- Explicit decisions agreed upon, including the underlying rationale and business or technical context.
+- Alternative options or viewpoints that were evaluated, deferred, or rejected.
+
+### Action Items, Deliverables & Owners
+- [ ] Task description (Owner / Assignee | Target Date or Timeline if discussed)
+- [ ] Explicit commitments, deliverables, and follow-up responsibilities.
+
+### Open Questions, Risks & Follow-ups
+- Unresolved issues, pending dependencies, or questions requiring future clarification.
+- Potential risks, blockers, or timeline sensitivities discussed.
 """
 
     public var endpoint: String

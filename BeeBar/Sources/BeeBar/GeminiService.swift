@@ -96,7 +96,8 @@ public actor GeminiService {
         text: String,
         apiKey: String,
         model: String = BeeConfig.defaultGeminiModel,
-        prePrompt: String? = nil
+        prePrompt: String? = nil,
+        onLog: (@Sendable (String) -> Void)? = nil
     ) async throws -> String {
         let key = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !key.isEmpty else {
@@ -111,6 +112,8 @@ public actor GeminiService {
             cleanModel = BeeConfig.defaultGeminiModel
         }
 
+        onLog?("[INIT] Initializing Gemini session with model: \(cleanModel)")
+
         let urlStr = "https://generativelanguage.googleapis.com/v1beta/models/\(cleanModel):generateContent?key=\(key)"
         guard let url = URL(string: urlStr) else {
             throw NSError(domain: "Gemini", code: 4, userInfo: [NSLocalizedDescriptionKey: "Invalid Gemini endpoint URL for model \(cleanModel)."])
@@ -122,6 +125,11 @@ public actor GeminiService {
         } else {
             instructions = BeeConfig.defaultGeminiPrompt
         }
+
+        onLog?("[PROMPT] Injected system prompt (\(instructions.count) characters)")
+
+        let truncatedLength = min(text.count, maxTranscriptCharacters)
+        onLog?("[PAYLOAD] Transcript ingested: \(truncatedLength) characters (capped at \(maxTranscriptCharacters))")
 
         let prompt = """
         \(instructions)
@@ -150,15 +158,26 @@ public actor GeminiService {
         request.httpBody = try JSONSerialization.data(withJSONObject: payload)
         request.timeoutInterval = 45
 
+        let payloadBytes = request.httpBody?.count ?? 0
+        let formattedBytes = ByteCountFormatter.string(fromByteCount: Int64(payloadBytes), countStyle: .file)
+        onLog?("[HTTP] POST https://generativelanguage.googleapis.com/v1beta/models/\(cleanModel):generateContent (\(formattedBytes))")
+        onLog?("[NET] Transmitting payload over TLS 1.3... Awaiting Gemini inference stream...")
+
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw NSError(domain: "Gemini", code: 5, userInfo: [NSLocalizedDescriptionKey: "No HTTP response from Gemini."])
         }
 
+        let respBytes = ByteCountFormatter.string(fromByteCount: Int64(data.count), countStyle: .file)
+        onLog?("[RECV] HTTP \(httpResponse.statusCode) OK received from Google Generative AI (\(respBytes))")
+
         guard httpResponse.statusCode == 200 else {
             let errString = String(data: data, encoding: .utf8) ?? "HTTP \(httpResponse.statusCode)"
+            onLog?("[ERROR] Gemini HTTP \(httpResponse.statusCode): \(errString)")
             throw NSError(domain: "Gemini", code: 6, userInfo: [NSLocalizedDescriptionKey: "Gemini API error (\(httpResponse.statusCode)): \(errString)"])
         }
+
+        onLog?("[PARSE] Parsing candidates and response parts...")
 
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
               let candidates = json["candidates"] as? [[String: Any]],
@@ -167,6 +186,9 @@ public actor GeminiService {
               let parts = content["parts"] as? [[String: Any]] else {
             throw NSError(domain: "Gemini", code: 7, userInfo: [NSLocalizedDescriptionKey: "Failed to parse Gemini response payload."])
         }
+
+        let finishReason = (firstCandidate["finishReason"] as? String) ?? "STOP"
+        onLog?("[PARSE] Candidate finishReason: \(finishReason)")
 
         // Concatenate all non-thought text parts in the candidate response
         let combinedText = parts.compactMap { part -> String? in
@@ -179,6 +201,8 @@ public actor GeminiService {
         guard !combinedText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw NSError(domain: "Gemini", code: 8, userInfo: [NSLocalizedDescriptionKey: "Gemini returned an empty summary."])
         }
+
+        onLog?("[SUCCESS] Executive summary generated (\(combinedText.count) characters)")
 
         return combinedText
     }
