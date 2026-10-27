@@ -9,8 +9,12 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.dmg">
+    <img src="https://img.shields.io/badge/Download-The_Bee_Bar_v1.1.0_(DMG)-blue?style=for-the-badge&logo=apple" alt="Download DMG">
+  </a>
+  &nbsp;&nbsp;
   <a href="https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip">
-    <img src="https://img.shields.io/badge/Download-The_Bee_Bar_v1.1.0_(macOS)-blue?style=for-the-badge&logo=apple" alt="Download The Bee Bar">
+    <img src="https://img.shields.io/badge/Download-ZIP_Archive-lightgrey?style=for-the-badge&logo=apple" alt="Download ZIP">
   </a>
 </p>
 
@@ -40,11 +44,14 @@ Running quietly in the macOS menu bar (`LSUIElement`), The Bee Bar synchronizes 
 
 ## Direct Download
 
-| Version | Target Platform | Release Archive |
+| Format | Target Platform | Release Package |
 |:---|:---|:---|
-| **v1.1.0** | macOS 13.0 or later (Apple Silicon & Intel) | [**Download The-Bee-Bar-macOS.zip**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip) |
+| **Apple Disk Image (.dmg)** *(Recommended)* | macOS 13.0 or later (Apple Silicon & Intel) | [**Download The-Bee-Bar-macOS.dmg**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.dmg) |
+| **ZIP Archive (.zip)** | macOS 13.0 or later (Apple Silicon & Intel) | [**Download The-Bee-Bar-macOS.zip**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip) |
 
-All official releases and change notes are available on the [GitHub Releases Page](https://github.com/joehagerman/The-Bee-Bar/releases).
+All official release builds and changelogs are available on the [GitHub Releases Page](https://github.com/joehagerman/The-Bee-Bar/releases).
+
+> Note for Safari Users: By default, Safari automatically expands `.zip` files into an application bundle upon download. Downloading the **.dmg** is recommended to preserve standard drag-and-drop installation.
 
 ---
 
@@ -93,9 +100,20 @@ All official releases and change notes are available on the [GitHub Releases Pag
 ## Step-by-Step Installation & Setup
 
 ### Step 1: Install the Application
-1. Download [**The-Bee-Bar-macOS.zip**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip).
-2. Uncompress the archive and drag `The Bee Bar.app` into your macOS `/Applications` directory.
-3. Open `The Bee Bar`. A striped bee icon will appear in the top-right macOS menu bar.
+1. Download [**The-Bee-Bar-macOS.dmg**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.dmg) (or [**The-Bee-Bar-macOS.zip**](https://github.com/joehagerman/The-Bee-Bar/releases/latest/download/The-Bee-Bar-macOS.zip)).
+2. Open the disk image (or extract the zip) and drag **The Bee Bar.app** into `/Applications`.
+3. Launch **The Bee Bar** from Applications or Spotlight. A striped bee icon will appear in the top-right macOS menu bar.
+
+#### Opening Unsigned Applications on macOS (Gatekeeper Notice)
+Because The Bee Bar is open-source and distributed directly via GitHub rather than the Mac App Store, macOS attaches a download quarantine flag (`com.apple.quarantine`) and may display:
+> *"The Bee Bar can't be opened because Apple cannot check it for malicious software"* or *"The Bee Bar is damaged and can’t be opened"*.
+
+To authorize the app (only required on first launch):
+- **Option 1 (Right-Click)**: In Finder, open `/Applications`, right-click (or Control-click) **The Bee Bar**, select **Open**, and click **Open** in the confirmation dialog.
+- **Option 2 (Terminal command)**: Run this one-line command to remove the macOS quarantine flag:
+  ```bash
+  xattr -cr "/Applications/The Bee Bar.app"
+  ```
 
 ### Step 2: Configure Bee Connection
 
